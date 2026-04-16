@@ -1,0 +1,77 @@
+version: "3.8"
+
+services:
+  # ── Bot 应用 ────────────────────────────────────────
+  bot:
+    build: .
+    container_name: telegram-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bot-network
+    # 生产环境 Webhook 模式启用端口映射
+    # ports:
+    #   - "${WEBHOOK_PORT:-8443}:${WEBHOOK_PORT:-8443}"
+
+  # ── MySQL 数据库 ────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: telegram-bot-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-telegram_bot}
+      MYSQL_USER: ${MYSQL_USER:-bot_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-bot_password}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot-network
+
+  # ── Redis 缓存 ──────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: telegram-bot-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  bot-network:
+    driver: bridge

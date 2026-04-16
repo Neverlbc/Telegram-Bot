@@ -1,0 +1,52 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}         # 服务器 IP
+          username: ${{ secrets.SERVER_USER }}     # 登录用户名 (如 root)
+          password: ${{ secrets.SERVER_PASSWORD }} # 登录密码 (如果用密码登录)
+          key: ${{ secrets.SERVER_SSH_KEY }}       # SSH 私钥 (如果用密钥登录，一般推荐这或密码二选一)
+          script: |
+            # 定义我们在服务器上的项目存放目录
+            PROJECT_DIR="/opt/telegram-bot"
+            
+            # 1. 确保目录存在并进入
+            mkdir -p $PROJECT_DIR
+            cd $PROJECT_DIR
+            
+            # 2. 如果项目还未执行过拉取，初始化 git 并拉取最新代码
+            if [ ! -d ".git" ]; then
+              echo "首次部署，克隆仓库..."
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              echo "拉取最新代码..."
+              # 放弃本地未提交的修改，拉取最新 main 分支代码
+              git reset --hard HEAD
+              git pull
+            fi
+            
+            # 3. 重新构建镜像并启动 Bot 及相关依赖服务
+            echo "重启 Docker 容器..."
+            docker-compose up -d --build
+            
+            # 4. 睡眠 10 秒，等待 MySQL 完全启动
+            echo "等待数据库就绪..."
+            sleep 10
+            
+            # 5. 执行自动执行数据库迁移 (Alembic)
+            echo "执行数据库迁移..."
+            docker-compose exec -T bot alembic upgrade head
+            
+            echo "🎉 部署完成！"
