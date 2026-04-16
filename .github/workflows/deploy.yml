@@ -26,20 +26,24 @@ jobs:
             mkdir -p $PROJECT_DIR
             cd $PROJECT_DIR
             
-            # 2. 如果项目还未执行过拉取，初始化 git 并拉取最新代码
+            # 2. 拉取最新代码
+            # 因为目录里已经手动存了 .env 文件，如果直接 git clone . 会报错“目录非空”
+            # 所以使用安全的 init + fetch + reset 拉取方式
             if [ ! -d ".git" ]; then
-              echo "首次部署，克隆仓库..."
-              git clone https://github.com/${{ github.repository }}.git .
-            else
-              echo "拉取最新代码..."
-              # 放弃本地未提交的修改，拉取最新 main 分支代码
-              git reset --hard HEAD
-              git pull
+              echo "首次部署，初始化 git..."
+              git init
+              git remote add origin https://github.com/${{ github.repository }}.git
             fi
+            
+            echo "拉取最新代码..."
+            git fetch origin
+            # 强制覆盖本地项目文件（不影响不在 git 里的 .env）
+            # 注意：此处假设你的主要分支是 main，如果你的主分支叫 master，请把 origin/main 替换为 origin/master
+            git reset --hard origin/main
             
             # 3. 重新构建镜像并启动 Bot 及相关依赖服务
             echo "重启 Docker 容器..."
-            docker-compose up -d --build
+            docker compose up -d --build
             
             # 4. 睡眠 10 秒，等待 MySQL 完全启动
             echo "等待数据库就绪..."
@@ -47,6 +51,6 @@ jobs:
             
             # 5. 执行自动执行数据库迁移 (Alembic)
             echo "执行数据库迁移..."
-            docker-compose exec -T bot alembic upgrade head
+            docker compose exec -T bot alembic upgrade head
             
             echo "🎉 部署完成！"
