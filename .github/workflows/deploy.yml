@@ -22,7 +22,7 @@ jobs:
             # 定义我们在服务器上的项目存放目录
             PROJECT_DIR="/opt/telegram-bot"
             
-            # 1. 确保目录存在并进入
+            # 1. 确保目录存在并进
             mkdir -p $PROJECT_DIR
             cd $PROJECT_DIR
             
