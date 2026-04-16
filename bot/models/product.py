@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from bot.models import Base, TimestampMixin
 
 
-class Category(Base):
+class Category(TimestampMixin, Base):
     """商品分类表 — 支持两级分类结构."""
 
     __tablename__ = "categories"
@@ -23,7 +23,6 @@ class Category(Base):
     name_ru: Mapped[str] = mapped_column(String(128), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
-    created_at: Mapped[str | None] = mapped_column(nullable=True)
 
     # 关系
     children: Mapped[list[Category]] = relationship("Category", back_populates="parent", lazy="selectin")
@@ -77,7 +76,7 @@ class Product(TimestampMixin, Base):
         return getattr(self, f"description_{lang}", self.description_zh)
 
 
-class ProductVariant(Base):
+class ProductVariant(TimestampMixin, Base):
     """商品规格与自动回复表."""
 
     __tablename__ = "product_variants"
@@ -96,7 +95,6 @@ class ProductVariant(Base):
     auto_reply_ru: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    updated_at: Mapped[str | None] = mapped_column(nullable=True)
 
     # 关系
     product: Mapped[Product] = relationship("Product", back_populates="variants")
