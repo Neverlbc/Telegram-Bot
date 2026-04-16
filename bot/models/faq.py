@@ -7,7 +7,7 @@ import enum
 from sqlalchemy import Enum, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from bot.models import Base
+from bot.models import Base, TimestampMixin
 
 
 class FaqType(str, enum.Enum):
