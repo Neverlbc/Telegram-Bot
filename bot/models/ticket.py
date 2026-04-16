@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -72,8 +73,8 @@ class SupportTicket(TimestampMixin, Base):
     )
     subject: Mapped[str | None] = mapped_column(String(256), nullable=True)
     ref_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    assigned_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
-    closed_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (
         Index("idx_ticket_user_id", "user_id"),
@@ -105,7 +106,7 @@ class SupportMessage(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    created_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (
         Index("idx_message_ticket_id", "ticket_id"),

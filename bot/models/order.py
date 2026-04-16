@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -43,8 +44,8 @@ class WholesaleOrder(TimestampMixin, Base):
         nullable=True,
     )
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    assigned_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
-    closed_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (
         Index("idx_wholesale_user_id", "user_id"),
@@ -68,7 +69,7 @@ class AftersaleQuery(TimestampMixin, Base):
     query_count: Mapped[int] = mapped_column(default=1, nullable=False)
     last_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     escalated: Mapped[bool] = mapped_column(default=False, nullable=False)
-    last_queried_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
+    last_queried_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (
         Index("idx_aftersale_user_id", "user_id"),
@@ -114,7 +115,7 @@ class LogisticsQuery(TimestampMixin, Base):
         nullable=False,
     )
     result_cache: Mapped[str | None] = mapped_column(Text, nullable=True)
-    last_queried_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
+    last_queried_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     query_count: Mapped[int] = mapped_column(default=1, nullable=False)
 
     __table_args__ = (

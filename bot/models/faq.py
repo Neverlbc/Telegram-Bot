@@ -17,7 +17,7 @@ class FaqType(str, enum.Enum):
     DELIVERY = "delivery"
 
 
-class FaqItem(Base):
+class FaqItem(TimestampMixin, Base):
     """FAQ 与配送说明表 — 统一存储两类内容."""
 
     __tablename__ = "faq_items"
@@ -34,8 +34,6 @@ class FaqItem(Base):
     answer_ru: Mapped[str] = mapped_column(Text, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
-    updated_at: Mapped[str | None] = mapped_column(nullable=True)
-
     __table_args__ = (
         Index("idx_faq_type_active", "type", "is_active", "sort_order"),
     )
