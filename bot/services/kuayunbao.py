@@ -44,11 +44,7 @@ class KuayunbaoClient:
         headers = {"Content-Type": "application/json"}
         has_auth = False
 
-        # 优先判断是否启用 Token 且通过 Token 走更方便:
-        if settings.kyb_token and settings.kyb_prefer_static_token:
-            headers["x-request-token"] = settings.kyb_token
-            has_auth = True
-        elif self.app_id and self.app_secret:
+        if self.app_id and self.app_secret:
             # MD5 签名机制
             post_json = json.dumps(request_data, ensure_ascii=False, separators=(",", ":"))
             timestamp = str(int(time.time() * 1000))
@@ -60,13 +56,13 @@ class KuayunbaoClient:
             headers["x-app-sign"] = app_sign
             headers["x-request-time"] = timestamp
             has_auth = True
-            
-            # 兼容：如果都填了，也带着token过去
-            if settings.kyb_token:
-                headers["x-request-token"] = settings.kyb_token
+
+        if settings.kyb_token:
+            headers["x-request-token"] = settings.kyb_token
+            has_auth = True
                 
         if not has_auth:
-            headers["x-request-token"] = settings.kyb_token or ""
+            headers["x-request-token"] = ""
             
         return headers
 
