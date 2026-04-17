@@ -54,12 +54,6 @@ class Settings(BaseSettings):
     kyb_api_url: str = Field("https://open.imlb2c.com", description="跨运宝 API 地址")
     kyb_token: str = Field("")
     kyb_prefer_static_token: bool = Field(True)
-    kyb_warehouse_code: str = Field("")
-    kyb_channel_code: str = Field("")
-    kyb_platform_customer_code: str = Field("")
-    kyb_timeout_ms: int = Field(10000)
-    kyb_enabled: bool = Field(True)
-    kyb_batch_size: int = Field(50)
 
     # ── 物流 API ──────────────────────────────────────
     cdek_client_id: str = Field("")
