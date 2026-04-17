@@ -20,13 +20,11 @@ class MenuCallback(CallbackData, prefix="menu"):
 class PresaleCallback(CallbackData, prefix="presale"):
     """售前咨询."""
 
-    action: str  # menu / catalog / delivery / faq / category / product / variant / faq_detail
-    category_id: int = 0
-    product_id: int = 0
-    variant: str = ""
+    action: str  # menu / catalog / delivery / faq / category / inventory / faq_detail
+    cat_id: str = ""      # 顶级分类 key (如 "thermal", "power")
+    sheet_key: str = ""   # sheet key (如 "thermal_industrial")
     faq_id: int = 0
     page: int = 1
-
 
 class OrderCallback(CallbackData, prefix="order"):
     """售中下单."""

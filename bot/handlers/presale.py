@@ -1,7 +1,8 @@
 """售前咨询 — 商品清单 / 配送说明 / 常见问题.
 
 M3 完整实现：
-- 商品类目浏览 (Category -> Product -> Variant -> 自动回复)
+- 商品类目浏览 (顶级分类 -> 子分类)
+- 实时库存查询 (对接 Google Sheets)
 - FAQ 列表与详情
 - 配送说明列表与详情
 """
@@ -9,27 +10,18 @@ M3 完整实现：
 from __future__ import annotations
 
 import logging
-import math
 
 from aiogram import Router
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.callbacks import NavCallback, PresaleCallback
-from bot.services.catalog import (
-    get_category_by_id,
-    get_product_by_id,
-    get_products_by_category,
-    get_subcategories,
-    get_top_categories,
-)
 from bot.services.faq_service import get_delivery_list, get_faq_item_by_id, get_faq_list
+from bot.services.sheets import TOP_CATEGORIES, SHEET_CONFIG, get_category_name, get_inventory, get_sheet_name
 
 logger = logging.getLogger(__name__)
 router = Router(name="presale")
-
-PAGE_SIZE = 8  # 每页商品数量
 
 
 # ── 多语言文案 ──────────────────────────────────────────
@@ -38,19 +30,8 @@ TEXTS = {
     "zh": {
         "catalog_title": "📋 <b>商品分类</b>\n\n请选择一个分类查看商品：",
         "subcategory_title": "📂 <b>{name}</b>\n\n请选择子分类：",
-        "products_title": "🛍 <b>{name}</b>\n\n请选择商品（第 {page}/{total_pages} 页）：",
-        "products_empty": "📭 该分类暂无商品。",
-        "product_detail": (
-            "📦 <b>{name}</b>\n\n"
-            "{description}\n\n"
-            "请选择规格了解详情："
-        ),
-        "product_no_desc": "暂无描述",
-        "variant_detail": (
-            "🔖 <b>{product_name}</b> — {variant_name}\n\n"
-            "{auto_reply}"
-        ),
-        "variant_no_reply": "暂无自动回复内容，请联系客服获取信息。",
+        "inventory_title": "🛍 <b>{name} 实时库存</b>\n\n莫斯科仓可用库存如下：\n\n{inventory_list}\n\n<i>(数据可能存在5分钟延迟)</i>",
+        "inventory_empty": "📭 <b>{name}</b> 暂无可用库存。",
         "faq_title": "❓ <b>常见问题</b>\n\n请选择问题查看答案：",
         "faq_empty": "📭 暂无常见问题。",
         "faq_detail": "❓ <b>{question}</b>\n\n{answer}",
@@ -58,26 +39,14 @@ TEXTS = {
         "delivery_empty": "📭 暂无配送说明。",
         "delivery_detail": "🚚 <b>{question}</b>\n\n{answer}",
         "no_db": "⚠️ 数据库未连接，暂时无法查看。",
-        "prev": "◀️ 上一页",
-        "next": "下一页 ▶️",
+        "loading_error": "❌ 拉取库存失败，请稍后再试。",
         "contact_cs": "💬 联系客服",
     },
     "en": {
         "catalog_title": "📋 <b>Product Categories</b>\n\nSelect a category:",
         "subcategory_title": "📂 <b>{name}</b>\n\nSelect a subcategory:",
-        "products_title": "🛍 <b>{name}</b>\n\nSelect a product (Page {page}/{total_pages}):",
-        "products_empty": "📭 No products in this category yet.",
-        "product_detail": (
-            "📦 <b>{name}</b>\n\n"
-            "{description}\n\n"
-            "Select a variant for details:"
-        ),
-        "product_no_desc": "No description available",
-        "variant_detail": (
-            "🔖 <b>{product_name}</b> — {variant_name}\n\n"
-            "{auto_reply}"
-        ),
-        "variant_no_reply": "No info available. Please contact support.",
+        "inventory_title": "🛍 <b>{name} Live Inventory</b>\n\nAvailable stock in Moscow:\n\n{inventory_list}\n\n<i>(Data may be up to 5 mins delayed)</i>",
+        "inventory_empty": "📭 No stock available for <b>{name}</b>.",
         "faq_title": "❓ <b>FAQ</b>\n\nSelect a question:",
         "faq_empty": "📭 No FAQ entries yet.",
         "faq_detail": "❓ <b>{question}</b>\n\n{answer}",
@@ -85,26 +54,14 @@ TEXTS = {
         "delivery_empty": "📭 No delivery info yet.",
         "delivery_detail": "🚚 <b>{question}</b>\n\n{answer}",
         "no_db": "⚠️ Database unavailable.",
-        "prev": "◀️ Prev",
-        "next": "Next ▶️",
+        "loading_error": "❌ Failed to load inventory, please try again later.",
         "contact_cs": "💬 Contact Support",
     },
     "ru": {
         "catalog_title": "📋 <b>Категории</b>\n\nВыберите категорию:",
         "subcategory_title": "📂 <b>{name}</b>\n\nВыберите подкатегорию:",
-        "products_title": "🛍 <b>{name}</b>\n\nВыберите товар (стр. {page}/{total_pages}):",
-        "products_empty": "📭 Нет товаров в этой категории.",
-        "product_detail": (
-            "📦 <b>{name}</b>\n\n"
-            "{description}\n\n"
-            "Выберите вариант:"
-        ),
-        "product_no_desc": "Описание отсутствует",
-        "variant_detail": (
-            "🔖 <b>{product_name}</b> — {variant_name}\n\n"
-            "{auto_reply}"
-        ),
-        "variant_no_reply": "Информация недоступна. Обратитесь в поддержку.",
+        "inventory_title": "🛍 <b>{name} Наличие</b>\n\nДоступно на складе в Москве:\n\n{inventory_list}\n\n<i>(Возможна задержка до 5 минут)</i>",
+        "inventory_empty": "📭 Нет товаров в наличии для <b>{name}</b>.",
         "faq_title": "❓ <b>FAQ</b>\n\nВыберите вопрос:",
         "faq_empty": "📭 FAQ пока нет.",
         "faq_detail": "❓ <b>{question}</b>\n\n{answer}",
@@ -112,8 +69,7 @@ TEXTS = {
         "delivery_empty": "📭 Информации о доставке пока нет.",
         "delivery_detail": "🚚 <b>{question}</b>\n\n{answer}",
         "no_db": "⚠️ БД недоступна.",
-        "prev": "◀️ Назад",
-        "next": "Далее ▶️",
+        "loading_error": "❌ Не удалось загрузить наличие, попробуйте позже.",
         "contact_cs": "💬 Поддержка",
     },
 }
@@ -126,7 +82,6 @@ def t(lang: str, key: str) -> str:
 
 def _nav_buttons(back_target: str) -> list[list[InlineKeyboardButton]]:
     """导航按钮行."""
-    back_texts = {"presale": "◀️", "menu": "🏠"}
     return [
         [InlineKeyboardButton(
             text="◀️ 返回上级",
@@ -152,8 +107,8 @@ async def on_presale_action(
     if not callback.message:
         return
 
-    # 无数据库连接时的降级处理
-    if session is None:
+    # FAQ 确实需要 DB 连接，库存查询不需要（但以防万一直接检查）
+    if session is None and callback_data.action in ("faq", "faq_detail", "delivery", "delivery_detail"):
         await callback.message.edit_text(t(lang, "no_db"))
         await callback.answer()
         return
@@ -161,21 +116,19 @@ async def on_presale_action(
     action = callback_data.action
 
     if action == "catalog":
-        await _show_catalog(callback, lang, session)
+        await _show_catalog(callback, lang)
     elif action == "category":
-        await _show_category(callback, callback_data, lang, session)
-    elif action == "product":
-        await _show_product(callback, callback_data, lang, session)
-    elif action == "variant":
-        await _show_variant(callback, callback_data, lang, session)
+        await _show_category(callback, callback_data, lang)
+    elif action == "inventory":
+        await _show_inventory(callback, callback_data, lang)
     elif action == "faq":
-        await _show_faq_list(callback, lang, session)
+        await _show_faq_list(callback, lang, session)  # type: ignore
     elif action == "faq_detail":
-        await _show_faq_detail(callback, callback_data, lang, session)
+        await _show_faq_detail(callback, callback_data, lang, session)  # type: ignore
     elif action == "delivery":
-        await _show_delivery_list(callback, lang, session)
+        await _show_delivery_list(callback, lang, session)  # type: ignore
     elif action == "delivery_detail":
-        await _show_delivery_detail(callback, callback_data, lang, session)
+        await _show_delivery_detail(callback, callback_data, lang, session)  # type: ignore
     else:
         await callback.answer()
         return
@@ -183,20 +136,31 @@ async def on_presale_action(
     await callback.answer()
 
 
-# ── 商品目录浏览 ────────────────────────────────────────
+# ── 商品目录浏览 (对接 Google Sheets) ───────────────────
 
 async def _show_catalog(
-    callback: CallbackQuery, lang: str, session: AsyncSession,
+    callback: CallbackQuery, lang: str,
 ) -> None:
     """展示顶级分类列表."""
-    categories = await get_top_categories(session)
-
     builder = InlineKeyboardBuilder()
-    for cat in categories:
-        builder.row(InlineKeyboardButton(
-            text=f"📂 {cat.get_name(lang)}",
-            callback_data=PresaleCallback(action="category", category_id=cat.id).pack(),
-        ))
+    for cat_key, cat_data in TOP_CATEGORIES.items():
+        name = get_category_name(cat_key, lang)
+        
+        # 如果是叶子节点（如“动力工具”），直接进入库存查询
+        if cat_data.get("leaf"):
+            sheet_key = cat_data["children"][0]
+            action = "inventory"
+            builder.row(InlineKeyboardButton(
+                text=f"📂 {name}",
+                callback_data=PresaleCallback(action=action, sheet_key=sheet_key, cat_id=cat_key).pack(),
+            ))
+        else:
+            action = "category"
+            builder.row(InlineKeyboardButton(
+                text=f"📂 {name}",
+                callback_data=PresaleCallback(action=action, cat_id=cat_key).pack(),
+            ))
+
     for row in _nav_buttons("presale"):
         builder.row(*row)
 
@@ -210,107 +174,68 @@ async def _show_category(
     callback: CallbackQuery,
     data: PresaleCallback,
     lang: str,
-    session: AsyncSession,
 ) -> None:
-    """展示子分类或商品列表."""
-    category_id = data.category_id
-    page = data.page
-
-    category = await get_category_by_id(session, category_id)
-    if not category:
+    """展示子分类列表 (如果顶级分类不是叶子节点)."""
+    cat_key = data.cat_id
+    cat_data = TOP_CATEGORIES.get(cat_key)
+    
+    if not cat_data:
         await callback.answer("❌ Category not found", show_alert=True)
         return
 
-    # 先检查是否有子分类
-    subcategories = await get_subcategories(session, category_id)
-    if subcategories:
-        builder = InlineKeyboardBuilder()
-        for sub in subcategories:
-            builder.row(InlineKeyboardButton(
-                text=f"📂 {sub.get_name(lang)}",
-                callback_data=PresaleCallback(action="category", category_id=sub.id).pack(),
-            ))
-        # 返回上一级（如果有父级就返回父级分类，否则返回目录首页）
-        if category.parent_id:
-            builder.row(InlineKeyboardButton(
-                text="◀️ 返回上级",
-                callback_data=PresaleCallback(action="category", category_id=category.parent_id).pack(),
-            ))
-        else:
-            builder.row(InlineKeyboardButton(
-                text="◀️ 返回分类",
-                callback_data=PresaleCallback(action="catalog").pack(),
-            ))
-        builder.row(InlineKeyboardButton(
-            text="🏠 主菜单",
-            callback_data=NavCallback(action="home").pack(),
-        ))
-
-        await callback.message.edit_text(  # type: ignore[union-attr]
-            t(lang, "subcategory_title").format(name=category.get_name(lang)),
-            reply_markup=builder.as_markup(),
-        )
-        return
-
-    # 没有子分类 → 展示商品列表
-    products, total = await get_products_by_category(session, category_id, page, PAGE_SIZE)
-    total_pages = max(1, math.ceil(total / PAGE_SIZE))
-
-    if not products:
-        builder = InlineKeyboardBuilder()
-        if category.parent_id:
-            builder.row(InlineKeyboardButton(
-                text="◀️ 返回上级",
-                callback_data=PresaleCallback(action="category", category_id=category.parent_id).pack(),
-            ))
-        else:
-            builder.row(InlineKeyboardButton(
-                text="◀️ 返回分类",
-                callback_data=PresaleCallback(action="catalog").pack(),
-            ))
-        builder.row(InlineKeyboardButton(
-            text="🏠 主菜单",
-            callback_data=NavCallback(action="home").pack(),
-        ))
-        await callback.message.edit_text(  # type: ignore[union-attr]
-            t(lang, "products_empty"),
-            reply_markup=builder.as_markup(),
-        )
-        return
-
     builder = InlineKeyboardBuilder()
-    for prod in products:
+    
+    # 罗列子分类 (如 "工业", "狩猎", "特殊")，点击后进入对应库存页
+    for sheet_key in cat_data["children"]:
+        name = get_sheet_name(sheet_key, lang)
         builder.row(InlineKeyboardButton(
-            text=f"📦 {prod.get_name(lang)}",
-            callback_data=PresaleCallback(
-                action="product", product_id=prod.id, category_id=category_id,
-            ).pack(),
+            text=f"📂 {name}",
+            callback_data=PresaleCallback(action="inventory", sheet_key=sheet_key, cat_id=cat_key).pack(),
         ))
 
-    # 翻页按钮
-    pagination_row: list[InlineKeyboardButton] = []
-    if page > 1:
-        pagination_row.append(InlineKeyboardButton(
-            text=t(lang, "prev"),
-            callback_data=PresaleCallback(
-                action="category", category_id=category_id, page=page - 1,
-            ).pack(),
-        ))
-    if page < total_pages:
-        pagination_row.append(InlineKeyboardButton(
-            text=t(lang, "next"),
-            callback_data=PresaleCallback(
-                action="category", category_id=category_id, page=page + 1,
-            ).pack(),
-        ))
-    if pagination_row:
-        builder.row(*pagination_row)
+    builder.row(InlineKeyboardButton(
+        text="◀️ 返回分类",
+        callback_data=PresaleCallback(action="catalog").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text="🏠 主菜单",
+        callback_data=NavCallback(action="home").pack(),
+    ))
 
-    # 返回导航
-    if category.parent_id:
+    await callback.message.edit_text(  # type: ignore[union-attr]
+        t(lang, "subcategory_title").format(name=get_category_name(cat_key, lang)),
+        reply_markup=builder.as_markup(),
+    )
+
+
+async def _show_inventory(
+    callback: CallbackQuery,
+    data: PresaleCallback,
+    lang: str,
+) -> None:
+    """展示从 Google Sheets 查询的库存列表."""
+    sheet_key = data.sheet_key
+    name = get_sheet_name(sheet_key, lang)
+    
+    # 拉取库存
+    items = await get_inventory(sheet_key)
+    builder = InlineKeyboardBuilder()
+
+    # 联系客服
+    from bot.keyboards.callbacks import SupportCallback
+    builder.row(InlineKeyboardButton(
+        text=t(lang, "contact_cs"),
+        callback_data=SupportCallback(action="human").pack(),
+    ))
+
+    # 返回导航 (如果有父分类就返回，否则返回主目录)
+    config = SHEET_CONFIG.get(sheet_key, {})
+    parent = config.get("parent")
+    
+    if parent and not TOP_CATEGORIES.get(parent, {}).get("leaf"):
         builder.row(InlineKeyboardButton(
             text="◀️ 返回上级",
-            callback_data=PresaleCallback(action="category", category_id=category.parent_id).pack(),
+            callback_data=PresaleCallback(action="category", cat_id=parent).pack(),
         ))
     else:
         builder.row(InlineKeyboardButton(
@@ -322,111 +247,28 @@ async def _show_category(
         callback_data=NavCallback(action="home").pack(),
     ))
 
-    await callback.message.edit_text(  # type: ignore[union-attr]
-        t(lang, "products_title").format(
-            name=category.get_name(lang), page=page, total_pages=total_pages,
-        ),
-        reply_markup=builder.as_markup(),
-    )
-
-
-async def _show_product(
-    callback: CallbackQuery,
-    data: PresaleCallback,
-    lang: str,
-    session: AsyncSession,
-) -> None:
-    """展示商品详情及其规格列表."""
-    product = await get_product_by_id(session, data.product_id)
-    if not product:
-        await callback.answer("❌ Product not found", show_alert=True)
+    if not items:
+        await callback.message.edit_text(  # type: ignore[union-attr]
+            t(lang, "inventory_empty").format(name=name),
+            reply_markup=builder.as_markup(),
+        )
         return
 
-    description = product.get_description(lang) or t(lang, "product_no_desc")
-    builder = InlineKeyboardBuilder()
-
-    # 规格列表
-    active_variants = [v for v in product.variants if v.is_active]
-    for var in sorted(active_variants, key=lambda v: v.sort_order):
-        builder.row(InlineKeyboardButton(
-            text=f"🔖 {var.get_name(lang)}",
-            callback_data=PresaleCallback(
-                action="variant",
-                product_id=product.id,
-                category_id=data.category_id,
-                variant=str(var.id),
-            ).pack(),
-        ))
-
-    # 联系客服快捷按钮
-    from bot.keyboards.callbacks import SupportCallback
-    builder.row(InlineKeyboardButton(
-        text=t(lang, "contact_cs"),
-        callback_data=SupportCallback(action="human").pack(),
-    ))
-
-    # 返回该分类的商品列表
-    builder.row(InlineKeyboardButton(
-        text="◀️ 返回商品列表",
-        callback_data=PresaleCallback(action="category", category_id=data.category_id).pack(),
-    ))
-    builder.row(InlineKeyboardButton(
-        text="🏠 主菜单",
-        callback_data=NavCallback(action="home").pack(),
-    ))
-
-    await callback.message.edit_text(  # type: ignore[union-attr]
-        t(lang, "product_detail").format(name=product.get_name(lang), description=description),
-        reply_markup=builder.as_markup(),
+    # 拼接库存详情文本
+    inventory_texts = [item.format_display() for item in items]
+    inventory_list = "\n".join(inventory_texts)
+    
+    text = t(lang, "inventory_title").format(
+        name=name,
+        inventory_list=inventory_list
     )
-
-
-async def _show_variant(
-    callback: CallbackQuery,
-    data: PresaleCallback,
-    lang: str,
-    session: AsyncSession,
-) -> None:
-    """展示规格详情及自动回复内容."""
-    from bot.services.catalog import get_variant_by_id
-
-    variant_id = int(data.variant) if data.variant else 0
-    variant = await get_variant_by_id(session, variant_id)
-    if not variant:
-        await callback.answer("❌ Variant not found", show_alert=True)
-        return
-
-    product = await get_product_by_id(session, data.product_id)
-    product_name = product.get_name(lang) if product else "—"
-
-    auto_reply = variant.get_auto_reply(lang) or t(lang, "variant_no_reply")
-    builder = InlineKeyboardBuilder()
-
-    # 联系客服
-    from bot.keyboards.callbacks import SupportCallback
-    builder.row(InlineKeyboardButton(
-        text=t(lang, "contact_cs"),
-        callback_data=SupportCallback(action="human").pack(),
-    ))
-
-    # 返回商品详情
-    builder.row(InlineKeyboardButton(
-        text="◀️ 返回商品",
-        callback_data=PresaleCallback(
-            action="product", product_id=data.product_id, category_id=data.category_id,
-        ).pack(),
-    ))
-    builder.row(InlineKeyboardButton(
-        text="🏠 主菜单",
-        callback_data=NavCallback(action="home").pack(),
-    ))
+    
+    # 限制文本长度，防止超出 Telegram 消息体限制 (约 4000 字符)
+    if len(text) > 4000:
+        text = text[:3900] + "\n\n...(省略多余内容，全部展示已截断)..."
 
     await callback.message.edit_text(  # type: ignore[union-attr]
-        t(lang, "variant_detail").format(
-            product_name=product_name,
-            variant_name=variant.get_name(lang),
-            auto_reply=auto_reply,
-        ),
+        text,
         reply_markup=builder.as_markup(),
     )
 
