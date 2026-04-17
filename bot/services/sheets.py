@@ -69,28 +69,28 @@ class InventoryItem:
 # 当你在 Google Sheets 新增分类 Sheet 时，在这里对应添加即可。
 SHEET_CONFIG: dict[str, dict[str, str | int]] = {
     "thermal_industrial": {
-        "gid": 0,          # ← 当前 工作表1 的 GID，之后拆分后请更新
+        "gid": 1141807238,
         "name_zh": "🏭 工业",
         "name_en": "🏭 Industrial",
         "name_ru": "🏭 Промышленные",
         "parent": "thermal",
     },
     "thermal_hunting": {
-        "gid": 0,          # ← 拆分后请更新为对应 GID
+        "gid": 0,
         "name_zh": "🎯 狩猎",
         "name_en": "🎯 Hunting",
         "name_ru": "🎯 Охота",
         "parent": "thermal",
     },
     "thermal_special": {
-        "gid": 0,          # ← 拆分后请更新为对应 GID
+        "gid": 986318582,
         "name_zh": "⭐ 特殊",
         "name_en": "⭐ Special",
         "name_ru": "⭐ Специальные",
         "parent": "thermal",
     },
     "power_tools": {
-        "gid": 0,          # ← 拆分后请更新为对应 GID
+        "gid": 850367314,
         "name_zh": "🔧 动力工具",
         "name_en": "🔧 Power Tools",
         "name_ru": "🔧 Инструменты",
