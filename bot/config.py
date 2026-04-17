@@ -44,9 +44,12 @@ class Settings(BaseSettings):
     webhook_port: int = Field(8443)
     webhook_secret: str = Field("")
 
-    # ── 聚水潭 ERP ────────────────────────────────────
+    # ── ERP 与 WMS (聚水潭 & 跨运宝) ───────────────────
     jushuitan_app_key: str = Field("")
     jushuitan_app_secret: str = Field("")
+    kyb_app_id: str = Field("")
+    kyb_app_secret: str = Field("")
+    kyb_api_url: str = Field("https://open.imlb2c.com", description="跨运宝 API 地址")
 
     # ── 物流 API ──────────────────────────────────────
     cdek_client_id: str = Field("")
