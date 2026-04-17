@@ -47,9 +47,19 @@ class Settings(BaseSettings):
     # ── ERP 与 WMS (聚水潭 & 跨运宝) ───────────────────
     jushuitan_app_key: str = Field("")
     jushuitan_app_secret: str = Field("")
+    
+    # 跨运宝配置
     kyb_app_id: str = Field("")
     kyb_app_secret: str = Field("")
     kyb_api_url: str = Field("https://open.imlb2c.com", description="跨运宝 API 地址")
+    kyb_token: str = Field("")
+    kyb_prefer_static_token: bool = Field(True)
+    kyb_warehouse_code: str = Field("")
+    kyb_channel_code: str = Field("")
+    kyb_platform_customer_code: str = Field("")
+    kyb_timeout_ms: int = Field(10000)
+    kyb_enabled: bool = Field(True)
+    kyb_batch_size: int = Field(50)
 
     # ── 物流 API ──────────────────────────────────────
     cdek_client_id: str = Field("")

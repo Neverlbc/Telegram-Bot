@@ -34,26 +34,41 @@ class KuayunbaoClient:
     @property
     def is_configured(self) -> bool:
         """检查凭证是否已配置."""
-        return bool(self.app_id and self.app_secret)
+        return bool(settings.kyb_token or (self.app_id and self.app_secret))
 
     def _build_headers(self, request_data: dict[str, Any]) -> dict[str, str]:
         """构建认证签名及 Request Headers."""
         if not self.is_configured:
-            raise ValueError("[KYB] 未配置 KYB_APP_ID 或 KYB_APP_SECRET")
+            raise ValueError("[KYB] 未配置 KYB_APP_ID/SECRET 或 KYB_TOKEN")
 
-        post_json = json.dumps(request_data, ensure_ascii=False, separators=(",", ":"))
-        timestamp = str(int(time.time() * 1000))  # 毫秒级时间戳
+        headers = {"Content-Type": "application/json"}
+        has_auth = False
 
-        # 签名算法: MD5(appSecret + timestamp + postJson)
-        sign_data = self.app_secret + timestamp + post_json
-        app_sign = hashlib.md5(sign_data.encode("utf-8")).hexdigest()
+        # 优先判断是否启用 Token 且通过 Token 走更方便:
+        if settings.kyb_token and settings.kyb_prefer_static_token:
+            headers["x-request-token"] = settings.kyb_token
+            has_auth = True
+        elif self.app_id and self.app_secret:
+            # MD5 签名机制
+            post_json = json.dumps(request_data, ensure_ascii=False, separators=(",", ":"))
+            timestamp = str(int(time.time() * 1000))
+            
+            sign_data = self.app_secret + timestamp + post_json
+            app_sign = hashlib.md5(sign_data.encode("utf-8")).hexdigest()
 
-        return {
-            "Content-Type": "application/json",
-            "x-app-id": self.app_id,
-            "x-app-sign": app_sign,
-            "x-request-time": timestamp,
-        }
+            headers["x-app-id"] = str(self.app_id).strip()
+            headers["x-app-sign"] = app_sign
+            headers["x-request-time"] = timestamp
+            has_auth = True
+            
+            # 兼容：如果都填了，也带着token过去
+            if settings.kyb_token:
+                headers["x-request-token"] = settings.kyb_token
+                
+        if not has_auth:
+            headers["x-request-token"] = settings.kyb_token or ""
+            
+        return headers
 
     async def _post(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
         """发送 POST 请求并处理标准异常."""
