@@ -53,4 +53,8 @@ jobs:
             echo "执行数据库迁移..."
             docker compose exec -T bot alembic upgrade head
             
+            # 6. 插入种子数据（如已存在则自动跳过）
+            echo "检查并插入种子数据..."
+            docker compose exec -T bot python -m bot.seeds
+            
             echo "🎉 部署完成！"
