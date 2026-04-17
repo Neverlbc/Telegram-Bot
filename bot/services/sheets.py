@@ -50,16 +50,21 @@ class InventoryItem:
     """单个库存条目."""
 
     sku: str
-    qty: int
+    qty: int        # Google Sheets QTYS（聚水潭库存代理）
     notes: str = ""
+    kyb_qty: int = 0  # KYB tocUsableQty（跨运宝已入俄仓数量）
+
+    @property
+    def net_qty(self) -> int:
+        """实际可售数量 = 聚水潭 - 跨运宝（最小为 0）."""
+        return max(0, self.qty - self.kyb_qty)
 
     @property
     def is_available(self) -> bool:
-        """是否有货."""
-        return self.qty >= 0
+        return self.net_qty > 0
 
     def format_display(self) -> str:
-        """格式化为展示文本."""
+        """格式化为展示文本，直接使用 qty（QTYS 已是最终显示数）."""
         note_part = f"\n   📝 {self.notes}" if self.notes.strip() else ""
         return f"• <b>{self.sku}</b>  ×{self.qty}{note_part}"
 
@@ -198,6 +203,59 @@ async def get_inventory(
             logger.debug("Cache set: %s (TTL=%ds)", cache_key, CACHE_TTL)
         except Exception as e:
             logger.warning("Redis cache write failed: %s", e)
+
+    return items
+
+
+KYB_STOCK_CACHE_TTL = 300  # 5 分钟
+
+
+async def get_inventory_with_kyb(sheet_key: str) -> list[InventoryItem]:
+    """获取库存并叠加 KYB 数据，计算实际可售数量.
+
+    net_qty = Google Sheets QTYS - KYB tocUsableQty（跨仓汇总）
+    KYB 查询结果单独缓存 5 分钟，避免频繁调用。
+    若 KYB 查询失败则降级为仅展示 Google Sheets 数据。
+    """
+    from bot.services.kuayunbao import kuayunbao_client
+
+    items = await get_inventory(sheet_key)
+    if not items:
+        return items
+
+    # ── 尝试从 Redis 读取 KYB 缓存 ────────────────────
+    redis = get_redis_client()
+    cache_key = f"kyb_stock:{sheet_key}"
+    kyb_map: dict[str, int] = {}
+
+    if redis is not None:
+        try:
+            import json as _json
+            cached = await redis.get(cache_key)
+            if cached:
+                kyb_map = _json.loads(cached)
+                logger.debug("KYB cache hit: %s", cache_key)
+        except Exception as e:
+            logger.warning("KYB cache read failed: %s", e)
+
+    # ── 缓存未命中，实时查 KYB ──────────────────────────
+    if not kyb_map and kuayunbao_client.is_configured:
+        skus = [item.sku for item in items]
+        try:
+            kyb_map = await kuayunbao_client.get_stock_map(skus)
+        except Exception as e:
+            logger.error("KYB stock_map query failed for %s: %s", sheet_key, e)
+
+        if kyb_map and redis is not None:
+            try:
+                import json as _json
+                await redis.set(cache_key, _json.dumps(kyb_map), ex=KYB_STOCK_CACHE_TTL)
+            except Exception as e:
+                logger.warning("KYB cache write failed: %s", e)
+
+    # ── 合并 KYB 数量到每个 InventoryItem ─────────────
+    for item in items:
+        item.kyb_qty = kyb_map.get(item.sku, 0)
 
     return items
 

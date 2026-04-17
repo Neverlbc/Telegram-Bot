@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # ── ERP 与 WMS (聚水潭 & 跨运宝) ───────────────────
     jushuitan_app_key: str = Field("")
     jushuitan_app_secret: str = Field("")
+    jushuitan_api_url: str = Field("https://openapi.jushuitan.com")
+
+    # Google Sheets 写入
+    google_credentials_file: str = Field("google_credentials.json", description="Service Account JSON 路径")
     
     # 跨运宝配置
     kyb_app_id: str = Field("")
@@ -54,6 +58,7 @@ class Settings(BaseSettings):
     kyb_api_url: str = Field("https://open.imlb2c.com", description="跨运宝 API 地址")
     kyb_token: str = Field("")
     kyb_prefer_static_token: bool = Field(True)
+    kyb_platform_customer_code: str = Field("", description="跨运宝平台客户编码 (stock_total_query 必填)")
 
     # ── 物流 API ──────────────────────────────────────
     cdek_client_id: str = Field("")

@@ -30,7 +30,7 @@ TEXTS = {
     "zh": {
         "catalog_title": "📋 <b>商品分类</b>\n\n请选择一个分类查看商品：",
         "subcategory_title": "📂 <b>{name}</b>\n\n请选择子分类：",
-        "inventory_title": "🛍 <b>{name} 实时库存</b>\n\n莫斯科仓可用库存如下：\n\n{inventory_list}\n\n<i>(数据可能存在5分钟延迟)</i>",
+        "inventory_title": "🛍 <b>{name} 实时库存</b>\n\n当前可下单数量如下：\n\n{inventory_list}\n\n<i>(数据可能存在5分钟延迟)</i>",
         "inventory_empty": "📭 <b>{name}</b> 暂无可用库存。",
         "faq_title": "❓ <b>常见问题</b>\n\n请选择问题查看答案：",
         "faq_empty": "📭 暂无常见问题。",
@@ -45,7 +45,7 @@ TEXTS = {
     "en": {
         "catalog_title": "📋 <b>Product Categories</b>\n\nSelect a category:",
         "subcategory_title": "📂 <b>{name}</b>\n\nSelect a subcategory:",
-        "inventory_title": "🛍 <b>{name} Live Inventory</b>\n\nAvailable stock in Moscow:\n\n{inventory_list}\n\n<i>(Data may be up to 5 mins delayed)</i>",
+        "inventory_title": "🛍 <b>{name} Live Inventory</b>\n\nAvailable to order:\n\n{inventory_list}\n\n<i>(Data may be up to 5 mins delayed)</i>",
         "inventory_empty": "📭 No stock available for <b>{name}</b>.",
         "faq_title": "❓ <b>FAQ</b>\n\nSelect a question:",
         "faq_empty": "📭 No FAQ entries yet.",
@@ -60,7 +60,7 @@ TEXTS = {
     "ru": {
         "catalog_title": "📋 <b>Категории</b>\n\nВыберите категорию:",
         "subcategory_title": "📂 <b>{name}</b>\n\nВыберите подкатегорию:",
-        "inventory_title": "🛍 <b>{name} Наличие</b>\n\nДоступно на складе в Москве:\n\n{inventory_list}\n\n<i>(Возможна задержка до 5 минут)</i>",
+        "inventory_title": "🛍 <b>{name} Наличие</b>\n\nДоступно для заказа:\n\n{inventory_list}\n\n<i>(Возможна задержка до 5 минут)</i>",
         "inventory_empty": "📭 Нет товаров в наличии для <b>{name}</b>.",
         "faq_title": "❓ <b>FAQ</b>\n\nВыберите вопрос:",
         "faq_empty": "📭 FAQ пока нет.",
@@ -217,7 +217,6 @@ async def _show_inventory(
     sheet_key = data.sheet_key
     name = get_sheet_name(sheet_key, lang)
     
-    # 拉取库存
     items = await get_inventory(sheet_key)
     builder = InlineKeyboardBuilder()
 

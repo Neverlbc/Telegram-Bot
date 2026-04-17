@@ -15,6 +15,11 @@ env/
 
 # Environment variables
 .env
+google_credentials.json
+*.token_cache.json
+
+# Development scratch
+scratch/
 
 # IDE
 .vscode/
