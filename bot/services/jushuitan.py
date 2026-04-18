@@ -248,7 +248,8 @@ class JushuitanClient:
                 for item in data.get("inventorys") or []:
                     sku = str(item.get("sku_id", "")).strip()
                     if sku:
-                        stock_map[sku] = int(item.get("qty", 0))
+                        # order_lock = 订单占有数（已被订单锁定的库存）
+                        stock_map[sku] = int(item.get("order_lock", 0))
                 if not data.get("has_next", False):
                     break
                 page += 1

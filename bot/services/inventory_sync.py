@@ -88,11 +88,12 @@ async def sync_sheet(sheet_key: str) -> SyncResult:
                 sheet_key, jst_found, len(sku_list), kyb_found, len(sku_list))
 
     # ── 3. 计算 QTYS ─────────────────────────────────────
+    # 公式：QTYS = KYB tocUsableQty - 聚水潭 order_lock（订单占有数）
     updates: dict[str, int] = {}
     for item in items:
-        jst_qty = jst_map.get(item.sku, item.qty)   # 未查到则保留原值
-        kyb_qty = kyb_map.get(item.sku, 0)
-        net = max(0, jst_qty - kyb_qty)
+        kyb_usable = kyb_map.get(item.sku, 0)
+        jst_order_lock = jst_map.get(item.sku, 0)
+        net = max(0, kyb_usable - jst_order_lock)
         updates[item.sku] = net
 
     # ── 4. 写回 Sheets ────────────────────────────────────
