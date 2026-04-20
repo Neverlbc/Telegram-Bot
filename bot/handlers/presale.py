@@ -152,10 +152,19 @@ def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str
     state_values = [item.get_display_state(lang) for item in items]
     note_values = [item.get_display_notes(lang) or labels["empty"] for item in items]
 
+    state_width_limit = {"zh": 4, "en": 8, "ru": 10}.get(lang, 4)
+    notes_width_limit = {"zh": 10, "en": 10, "ru": 10}.get(lang, 10)
+
     sku_width = max(_display_width(labels["sku"]), min(max(_display_width(value) for value in sku_values), 12))
     qty_width = max(_display_width(labels["qty"]), max(_display_width(value) for value in qty_values))
-    state_width = max(_display_width(labels["state"]), min(max(_display_width(value) for value in state_values), 4))
-    notes_width = max(_display_width(labels["notes"]), min(max(_display_width(value) for value in note_values), 10))
+    state_width = max(
+        _display_width(labels["state"]),
+        min(max(_display_width(value) for value in state_values), state_width_limit),
+    )
+    notes_width = max(
+        _display_width(labels["notes"]),
+        min(max(_display_width(value) for value in note_values), notes_width_limit),
+    )
 
     lines = [
         (
@@ -165,8 +174,9 @@ def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str
             f"{_fit_table_cell(labels['notes'], notes_width)}"
         ),
     ]
+    separator = "─" * (sku_width + qty_width + state_width + notes_width + 6)
 
-    for item in items:
+    for item_index, item in enumerate(items):
         sku_lines = _wrap_table_cell(item.sku, sku_width)
         qty_lines = _wrap_table_cell(str(item.qty), qty_width)
         state_lines = _wrap_table_cell(item.get_display_state(lang), state_width)
@@ -184,6 +194,8 @@ def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str
                 f"{_fit_table_cell(state_value, state_width)}  "
                 f"{_fit_table_cell(note_value, notes_width)}"
             )
+        if item_index < len(items) - 1:
+            lines.append(separator)
 
     return lines
 

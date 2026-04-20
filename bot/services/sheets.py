@@ -70,7 +70,7 @@ class InventoryItem:
             labels = {
                 "zh": "缺货",
                 "en": "Out of stock",
-                "ru": "Нет в наличии",
+                "ru": "распродано",
             }
             return labels.get(lang, labels["zh"])
 
@@ -110,9 +110,10 @@ class InventoryItem:
             "instock": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
             "有货": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
             "в наличии": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
-            "out of stock": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
-            "缺货": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
-            "нет в наличии": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+            "out of stock": {"zh": "缺货", "en": "Out of stock", "ru": "распродано"},
+            "缺货": {"zh": "缺货", "en": "Out of stock", "ru": "распродано"},
+            "нет в наличии": {"zh": "缺货", "en": "Out of stock", "ru": "распродано"},
+            "распродано": {"zh": "缺货", "en": "Out of stock", "ru": "распродано"},
             "in transit": {"zh": "运输中", "en": "In transit", "ru": "В пути"},
             "运输中": {"zh": "运输中", "en": "In transit", "ru": "В пути"},
             "в пути": {"zh": "运输中", "en": "In transit", "ru": "В пути"},
