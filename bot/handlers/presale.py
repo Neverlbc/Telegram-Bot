@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from html import escape
+from unicodedata import east_asian_width
 
 from aiogram import Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton
@@ -92,59 +93,103 @@ def t(lang: str, key: str) -> str:
     return TEXTS.get(lang, TEXTS["zh"]).get(key, TEXTS["zh"][key])
 
 
+def _display_width(value: str) -> int:
+    """计算字符串在等宽布局中的显示宽度."""
+    return sum(2 if east_asian_width(char) in {"F", "W"} else 1 for char in value)
+
+
+def _fit_table_cell(value: str, width: int) -> str:
+    """裁剪并补齐单元格内容."""
+    if _display_width(value) <= width:
+        return value + " " * (width - _display_width(value))
+
+    result = ""
+    current_width = 0
+    for char in value:
+        char_width = 2 if east_asian_width(char) in {"F", "W"} else 1
+        if current_width + char_width > width - 1:
+            break
+        result += char
+        current_width += char_width
+    return result + "…" + " " * (width - current_width - 1)
+
+
+def _right_table_cell(value: str, width: int) -> str:
+    """右对齐单元格内容."""
+    return " " * max(0, width - _display_width(value)) + value
+
+
 def _inventory_labels(lang: str) -> dict[str, str]:
     """库存字段标签本地化."""
     labels = {
-        "zh": {
-            "sku": "SKU",
-            "qty": "QTYS",
-            "state": "状态",
-            "notes": "备注",
-            "empty": "-",
-        },
-        "en": {
-            "sku": "SKU",
-            "qty": "QTYS",
-            "state": "State",
-            "notes": "Notes",
-            "empty": "-",
-        },
-        "ru": {
-            "sku": "SKU",
-            "qty": "QTYS",
-            "state": "Статус",
-            "notes": "Примечание",
-            "empty": "-",
-        },
+        "zh": {"sku": "SKU", "qty": "QTYS", "state": "状态", "notes": "备注", "empty": "-"},
+        "en": {"sku": "SKU", "qty": "QTYS", "state": "State", "notes": "Notes", "empty": "-"},
+        "ru": {"sku": "SKU", "qty": "QTYS", "state": "Статус", "notes": "Примечание", "empty": "-"},
     }
     return labels.get(lang, labels["zh"])
 
 
-def _format_inventory_item(item: InventoryItem, lang: str) -> str:
-    """将单个库存条目格式化为移动端友好的卡片文本."""
-    labels = _inventory_labels(lang)
-    note_value = item.get_display_notes(lang) or labels["empty"]
+def _compact_state(item: InventoryItem, lang: str) -> str:
+    """为窄屏表格生成更紧凑的状态值."""
+    state = item.get_display_state(lang)
+    compact_map = {
+        "zh": {"有货": "有货", "缺货": "缺货", "运输中": "运输中"},
+        "en": {"Available": "Avail", "In stock": "Stock", "Out of stock": "OOS", "In transit": "Transit"},
+        "ru": {"В наличии": "Есть", "Нет в наличии": "Нет", "В пути": "В пути"},
+    }
+    return compact_map.get(lang, {}).get(state, state)
 
-    return "\n".join(
-        [
-            f"<b>{labels['sku']}:</b> <code>{escape(item.sku)}</code>",
-            (
-                f"<b>{labels['qty']}:</b> {item.qty}    "
-                f"<b>{labels['state']}:</b> {escape(item.get_display_state(lang))}"
-            ),
-            f"<b>{labels['notes']}:</b> {escape(note_value)}",
-        ]
-    )
+
+def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str]:
+    """生成适合 Telegram 手机端的紧凑表格."""
+    labels = _inventory_labels(lang)
+
+    sku_values = [item.sku for item in items]
+    qty_values = [str(item.qty) for item in items]
+    state_values = [_compact_state(item, lang) for item in items]
+    note_values = [item.get_display_notes(lang) or labels["empty"] for item in items]
+
+    sku_width = max(_display_width(labels["sku"]), min(max(_display_width(value) for value in sku_values), 12))
+    qty_width = max(_display_width(labels["qty"]), max(_display_width(value) for value in qty_values))
+    state_width = max(_display_width(labels["state"]), min(max(_display_width(value) for value in state_values), 8))
+    notes_width = max(_display_width(labels["notes"]), min(max(_display_width(value) for value in note_values), 12))
+
+    lines = [
+        (
+            f"{_fit_table_cell(labels['sku'], sku_width)}  "
+            f"{_right_table_cell(labels['qty'], qty_width)}  "
+            f"{_fit_table_cell(labels['state'], state_width)}  "
+            f"{_fit_table_cell(labels['notes'], notes_width)}"
+        ),
+        (
+            f"{'─' * sku_width}  "
+            f"{'─' * qty_width}  "
+            f"{'─' * state_width}  "
+            f"{'─' * notes_width}"
+        ),
+    ]
+
+    for sku_value, qty_value, state_value, note_value in zip(
+        sku_values, qty_values, state_values, note_values, strict=False
+    ):
+        lines.append(
+            f"{_fit_table_cell(sku_value, sku_width)}  "
+            f"{_right_table_cell(qty_value, qty_width)}  "
+            f"{_fit_table_cell(state_value, state_width)}  "
+            f"{_fit_table_cell(note_value, notes_width)}"
+        )
+
+    return lines
 
 
 def _format_inventory_list(items: Sequence[InventoryItem], lang: str, max_length: int = 3200) -> str:
-    """将库存列表格式化为适合 Telegram 手机端展示的卡片列表."""
+    """将库存列表格式化为适合 Telegram 手机端展示的紧凑表格."""
     shown_count = len(items)
-    separator = "\n" + ("─" * 18) + "\n"
 
     while shown_count > 0:
         shown_items = items[:shown_count]
-        inventory_html = separator.join(_format_inventory_item(item, lang) for item in shown_items)
+        table_lines = _build_inventory_rows(shown_items, lang)
+        inventory_html = f"<pre>{escape(chr(10).join(table_lines))}</pre>"
 
         more_html = ""
         if shown_count < len(items):
@@ -156,7 +201,8 @@ def _format_inventory_list(items: Sequence[InventoryItem], lang: str, max_length
 
         shown_count -= 1
 
-    return _format_inventory_item(items[0], lang)
+    table_lines = _build_inventory_rows(items[:1], lang)
+    return f"<pre>{escape(chr(10).join(table_lines))}</pre>"
 
 
 def _nav_buttons(back_target: str) -> list[list[InlineKeyboardButton]]:
