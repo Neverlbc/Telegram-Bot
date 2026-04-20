@@ -87,6 +87,9 @@ class InventoryItem:
 
     def get_display_notes(self, lang: str = "zh") -> str:
         """获取展示用备注."""
+        if self.notes.strip():
+            return self.notes.strip()
+
         if self.qty == 0:
             labels = {
                 "zh": "正在运输途中",
@@ -95,7 +98,7 @@ class InventoryItem:
             }
             return labels.get(lang, labels["zh"])
 
-        return self.notes.strip()
+        return ""
 
     def _normalize_state(self, lang: str) -> str:
         """将常见状态值归一到当前语言."""
