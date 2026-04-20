@@ -99,19 +99,8 @@ def _display_width(value: str) -> int:
 
 
 def _fit_table_cell(value: str, width: int) -> str:
-    """裁剪并补齐单元格内容."""
-    if _display_width(value) <= width:
-        return value + " " * (width - _display_width(value))
-
-    result = ""
-    current_width = 0
-    for char in value:
-        char_width = 2 if east_asian_width(char) in {"F", "W"} else 1
-        if current_width + char_width > width - 1:
-            break
-        result += char
-        current_width += char_width
-    return result + "…" + " " * (width - current_width - 1)
+    """补齐单元格内容，不做省略."""
+    return value + " " * max(0, width - _display_width(value))
 
 
 def _right_table_cell(value: str, width: int) -> str:
@@ -122,36 +111,36 @@ def _right_table_cell(value: str, width: int) -> str:
 def _inventory_labels(lang: str) -> dict[str, str]:
     """库存字段标签本地化."""
     labels = {
-        "zh": {"sku": "SKU", "qty": "数", "state": "态", "notes": "备", "empty": "-"},
-        "en": {"sku": "SKU", "qty": "Qty", "state": "St", "notes": "Nt", "empty": "-"},
-        "ru": {"sku": "SKU", "qty": "Кол", "state": "Ст", "notes": "Пр", "empty": "-"},
+        "zh": {"sku": "SKU", "qty": "QTYS", "state": "状态", "notes": "备注", "empty": "-"},
+        "en": {"sku": "SKU", "qty": "QTYS", "state": "State", "notes": "Notes", "empty": "-"},
+        "ru": {"sku": "SKU", "qty": "QTYS", "state": "Статус", "notes": "Примечание", "empty": "-"},
     }
     return labels.get(lang, labels["zh"])
 
 
-def _compact_state(item: InventoryItem, lang: str) -> str:
-    """为窄屏表格生成更紧凑的状态值."""
-    state = item.get_display_state(lang)
-    compact_map = {
-        "zh": {"有货": "有", "缺货": "缺", "运输中": "途"},
-        "en": {"Available": "OK", "In stock": "OK", "Out of stock": "OOS", "In transit": "TR"},
-        "ru": {"В наличии": "Есть", "Нет в наличии": "Нет", "В пути": "Путь"},
-    }
-    return compact_map.get(lang, {}).get(state, state)
+def _wrap_table_cell(value: str, width: int) -> list[str]:
+    """按列宽换行，不省略内容."""
+    if not value:
+        return [""]
 
+    lines: list[str] = []
+    current = ""
+    current_width = 0
 
-def _compact_note(item: InventoryItem, lang: str) -> str:
-    """为窄屏表格生成更紧凑的备注值."""
-    note = item.get_display_notes(lang)
-    if not note:
-        return _inventory_labels(lang)["empty"]
+    for char in value:
+        char_width = 2 if east_asian_width(char) in {"F", "W"} else 1
+        if current and current_width + char_width > width:
+            lines.append(current)
+            current = char
+            current_width = char_width
+            continue
+        current += char
+        current_width += char_width
 
-    compact_map = {
-        "zh": {"正在运输途中": "在途"},
-        "en": {"In transit": "Transit"},
-        "ru": {"В пути": "В пути"},
-    }
-    return compact_map.get(lang, {}).get(note, note)
+    if current:
+        lines.append(current)
+
+    return lines
 
 
 def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str]:
@@ -160,13 +149,13 @@ def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str
 
     sku_values = [item.sku for item in items]
     qty_values = [str(item.qty) for item in items]
-    state_values = [_compact_state(item, lang) for item in items]
-    note_values = [_compact_note(item, lang) or labels["empty"] for item in items]
+    state_values = [item.get_display_state(lang) for item in items]
+    note_values = [item.get_display_notes(lang) or labels["empty"] for item in items]
 
-    sku_width = max(_display_width(labels["sku"]), min(max(_display_width(value) for value in sku_values), 11))
+    sku_width = max(_display_width(labels["sku"]), min(max(_display_width(value) for value in sku_values), 12))
     qty_width = max(_display_width(labels["qty"]), max(_display_width(value) for value in qty_values))
     state_width = max(_display_width(labels["state"]), min(max(_display_width(value) for value in state_values), 4))
-    notes_width = max(_display_width(labels["notes"]), min(max(_display_width(value) for value in note_values), 6))
+    notes_width = max(_display_width(labels["notes"]), min(max(_display_width(value) for value in note_values), 10))
 
     lines = [
         (
@@ -175,23 +164,26 @@ def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str
             f"{_fit_table_cell(labels['state'], state_width)}  "
             f"{_fit_table_cell(labels['notes'], notes_width)}"
         ),
-        (
-            f"{'─' * sku_width}  "
-            f"{'─' * qty_width}  "
-            f"{'─' * state_width}  "
-            f"{'─' * notes_width}"
-        ),
     ]
 
-    for sku_value, qty_value, state_value, note_value in zip(
-        sku_values, qty_values, state_values, note_values, strict=False
-    ):
-        lines.append(
-            f"{_fit_table_cell(sku_value, sku_width)}  "
-            f"{_right_table_cell(qty_value, qty_width)}  "
-            f"{_fit_table_cell(state_value, state_width)}  "
-            f"{_fit_table_cell(note_value, notes_width)}"
-        )
+    for item in items:
+        sku_lines = _wrap_table_cell(item.sku, sku_width)
+        qty_lines = _wrap_table_cell(str(item.qty), qty_width)
+        state_lines = _wrap_table_cell(item.get_display_state(lang), state_width)
+        note_lines = _wrap_table_cell(item.get_display_notes(lang) or labels["empty"], notes_width)
+
+        row_height = max(len(sku_lines), len(qty_lines), len(state_lines), len(note_lines))
+        for index in range(row_height):
+            sku_value = sku_lines[index] if index < len(sku_lines) else ""
+            qty_value = qty_lines[index] if index < len(qty_lines) else ""
+            state_value = state_lines[index] if index < len(state_lines) else ""
+            note_value = note_lines[index] if index < len(note_lines) else ""
+            lines.append(
+                f"{_fit_table_cell(sku_value, sku_width)}  "
+                f"{_right_table_cell(qty_value, qty_width)}  "
+                f"{_fit_table_cell(state_value, state_width)}  "
+                f"{_fit_table_cell(note_value, notes_width)}"
+            )
 
     return lines
 
