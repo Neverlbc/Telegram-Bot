@@ -113,7 +113,7 @@ def _inventory_labels(lang: str) -> dict[str, str]:
     labels = {
         "zh": {"sku": "SKU", "qty": "QTYS", "state": "状态", "notes": "备注", "empty": "-"},
         "en": {"sku": "SKU", "qty": "QTYS", "state": "State", "notes": "Notes", "empty": "-"},
-        "ru": {"sku": "SKU", "qty": "QTYS", "state": "Статус", "notes": "Примечание", "empty": "-"},
+        "ru": {"sku": "SKU", "qty": "QTYS", "state": "Статус", "notes": "Прим.", "empty": "-"},
     }
     return labels.get(lang, labels["zh"])
 
@@ -155,7 +155,8 @@ def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str
     state_width_limit = {"zh": 4, "en": 8, "ru": 10}.get(lang, 4)
     notes_width_limit = {"zh": 10, "en": 10, "ru": 10}.get(lang, 10)
 
-    sku_width = max(_display_width(labels["sku"]), min(max(_display_width(value) for value in sku_values), 12))
+    sku_width_limit = {"zh": 12, "en": 12, "ru": 10}.get(lang, 12)
+    sku_width = max(_display_width(labels["sku"]), min(max(_display_width(value) for value in sku_values), sku_width_limit))
     qty_width = max(_display_width(labels["qty"]), max(_display_width(value) for value in qty_values))
     state_width = max(
         _display_width(labels["state"]),
@@ -168,13 +169,14 @@ def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str
 
     lines = [
         (
-            f"{_fit_table_cell(labels['sku'], sku_width)}  "
-            f"{_right_table_cell(labels['qty'], qty_width)}  "
-            f"{_fit_table_cell(labels['state'], state_width)}  "
+            f"{_fit_table_cell(labels['sku'], sku_width)} "
+            f"{_right_table_cell(labels['qty'], qty_width)} "
+            f"{_fit_table_cell(labels['state'], state_width)} "
             f"{_fit_table_cell(labels['notes'], notes_width)}"
         ),
     ]
-    separator = "─" * (sku_width + qty_width + state_width + notes_width + 6)
+    separator_width = {"zh": 24, "en": 24, "ru": 22}.get(lang, 24)
+    separator = "─" * separator_width
 
     for item_index, item in enumerate(items):
         sku_lines = _wrap_table_cell(item.sku, sku_width)
@@ -189,9 +191,9 @@ def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str
             state_value = state_lines[index] if index < len(state_lines) else ""
             note_value = note_lines[index] if index < len(note_lines) else ""
             lines.append(
-                f"{_fit_table_cell(sku_value, sku_width)}  "
-                f"{_right_table_cell(qty_value, qty_width)}  "
-                f"{_fit_table_cell(state_value, state_width)}  "
+                f"{_fit_table_cell(sku_value, sku_width)} "
+                f"{_right_table_cell(qty_value, qty_width)} "
+                f"{_fit_table_cell(state_value, state_width)} "
                 f"{_fit_table_cell(note_value, notes_width)}"
             )
         if item_index < len(items) - 1:
