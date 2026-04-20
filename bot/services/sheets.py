@@ -51,6 +51,7 @@ class InventoryItem:
 
     sku: str
     qty: int        # Google Sheets QTYS（聚水潭库存代理）
+    state: str = ""
     notes: str = ""
     kyb_qty: int = 0  # KYB tocUsableQty（跨运宝已入俄仓数量）
 
@@ -62,6 +63,65 @@ class InventoryItem:
     @property
     def is_available(self) -> bool:
         return self.net_qty > 0
+
+    def get_display_state(self, lang: str = "zh") -> str:
+        """获取展示用库存状态."""
+        if self.qty == 0:
+            labels = {
+                "zh": "缺货",
+                "en": "Out of stock",
+                "ru": "Нет в наличии",
+            }
+            return labels.get(lang, labels["zh"])
+
+        normalized = self._normalize_state(lang)
+        if normalized:
+            return normalized
+
+        labels = {
+            "zh": "有货",
+            "en": "In stock",
+            "ru": "В наличии",
+        }
+        return labels.get(lang, labels["zh"])
+
+    def get_display_notes(self, lang: str = "zh") -> str:
+        """获取展示用备注."""
+        if self.qty == 0:
+            labels = {
+                "zh": "正在运输途中",
+                "en": "In transit",
+                "ru": "В пути",
+            }
+            return labels.get(lang, labels["zh"])
+
+        return self.notes.strip()
+
+    def _normalize_state(self, lang: str) -> str:
+        """将常见状态值归一到当前语言."""
+        raw_state = self.state.strip()
+        if not raw_state:
+            return ""
+
+        key = raw_state.casefold()
+        state_map = {
+            "available": {"zh": "有货", "en": "Available", "ru": "В наличии"},
+            "in stock": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
+            "instock": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
+            "有货": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
+            "в наличии": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
+            "out of stock": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+            "缺货": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+            "нет в наличии": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+            "in transit": {"zh": "运输中", "en": "In transit", "ru": "В пути"},
+            "运输中": {"zh": "运输中", "en": "In transit", "ru": "В пути"},
+            "в пути": {"zh": "运输中", "en": "In transit", "ru": "В пути"},
+        }
+
+        labels = state_map.get(key)
+        if labels:
+            return labels.get(lang, labels["zh"])
+        return raw_state
 
     def format_display(self) -> str:
         """格式化为展示文本，直接使用 qty（QTYS 已是最终显示数）."""
@@ -148,9 +208,10 @@ def _parse_csv(csv_text: str) -> list[InventoryItem]:
             qty = int(row.get("QTYS", "0").strip() or "0")
         except ValueError:
             qty = 0
+        state = row.get("State", row.get("state", "")).strip()
         notes = row.get("Notes", "").strip()
         if qty >= 0:
-            items.append(InventoryItem(sku=sku, qty=qty, notes=notes))
+            items.append(InventoryItem(sku=sku, qty=qty, state=state, notes=notes))
     return items
 
 

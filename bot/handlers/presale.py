@@ -10,6 +10,9 @@ M3 完整实现：
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
+from html import escape
+from unicodedata import east_asian_width
 
 from aiogram import Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton
@@ -18,7 +21,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.callbacks import NavCallback, PresaleCallback
 from bot.services.faq_service import get_delivery_list, get_faq_item_by_id, get_faq_list
-from bot.services.sheets import TOP_CATEGORIES, SHEET_CONFIG, get_category_name, get_inventory, get_sheet_name
+from bot.services.sheets import (
+    SHEET_CONFIG,
+    TOP_CATEGORIES,
+    InventoryItem,
+    get_category_name,
+    get_inventory,
+    get_sheet_name,
+)
 
 logger = logging.getLogger(__name__)
 router = Router(name="presale")
@@ -32,6 +42,7 @@ TEXTS = {
         "subcategory_title": "📂 <b>{name}</b>\n\n请选择子分类：",
         "inventory_title": "🛍 <b>{name} 实时库存</b>\n\n当前可下单数量如下：\n\n{inventory_list}\n\n<i>(数据可能存在5分钟延迟)</i>",
         "inventory_empty": "📭 <b>{name}</b> 暂无可用库存。",
+        "inventory_more": "… 其余 {count} 条库存未显示",
         "faq_title": "❓ <b>常见问题</b>\n\n请选择问题查看答案：",
         "faq_empty": "📭 暂无常见问题。",
         "faq_detail": "❓ <b>{question}</b>\n\n{answer}",
@@ -47,6 +58,7 @@ TEXTS = {
         "subcategory_title": "📂 <b>{name}</b>\n\nSelect a subcategory:",
         "inventory_title": "🛍 <b>{name} Live Inventory</b>\n\nAvailable to order:\n\n{inventory_list}\n\n<i>(Data may be up to 5 mins delayed)</i>",
         "inventory_empty": "📭 No stock available for <b>{name}</b>.",
+        "inventory_more": "… {count} more inventory rows not shown",
         "faq_title": "❓ <b>FAQ</b>\n\nSelect a question:",
         "faq_empty": "📭 No FAQ entries yet.",
         "faq_detail": "❓ <b>{question}</b>\n\n{answer}",
@@ -62,6 +74,7 @@ TEXTS = {
         "subcategory_title": "📂 <b>{name}</b>\n\nВыберите подкатегорию:",
         "inventory_title": "🛍 <b>{name} Наличие</b>\n\nДоступно для заказа:\n\n{inventory_list}\n\n<i>(Возможна задержка до 5 минут)</i>",
         "inventory_empty": "📭 Нет товаров в наличии для <b>{name}</b>.",
+        "inventory_more": "… ещё {count} строк не показано",
         "faq_title": "❓ <b>FAQ</b>\n\nВыберите вопрос:",
         "faq_empty": "📭 FAQ пока нет.",
         "faq_detail": "❓ <b>{question}</b>\n\n{answer}",
@@ -78,6 +91,115 @@ TEXTS = {
 def t(lang: str, key: str) -> str:
     """获取多语言文案."""
     return TEXTS.get(lang, TEXTS["zh"]).get(key, TEXTS["zh"][key])
+
+
+def _display_width(value: str) -> int:
+    """计算等宽表格中的显示宽度，兼容中俄文字符."""
+    return sum(2 if east_asian_width(char) in {"F", "W"} else 1 for char in value)
+
+
+def _fit_table_cell(value: str, width: int) -> str:
+    """裁剪并补齐表格单元格内容."""
+    if _display_width(value) <= width:
+        return value + " " * (width - _display_width(value))
+
+    result = ""
+    current_width = 0
+    for char in value:
+        char_width = 2 if east_asian_width(char) in {"F", "W"} else 1
+        if current_width + char_width > width - 1:
+            break
+        result += char
+        current_width += char_width
+    return result + "…" + " " * (width - current_width - 1)
+
+
+def _right_table_cell(value: str, width: int) -> str:
+    """右对齐表格单元格内容."""
+    return " " * max(0, width - _display_width(value)) + value
+
+
+def _build_inventory_rows(items: Sequence[InventoryItem], lang: str) -> list[str]:
+    """生成库存表格行."""
+    headers = {
+        "zh": ("SKU", "QTYS", "状态", "备注"),
+        "en": ("SKU", "QTYS", "State", "Notes"),
+        "ru": ("SKU", "QTYS", "Статус", "Примечание"),
+    }
+    sku_header, qty_header, state_header, notes_header = headers.get(lang, headers["zh"])
+
+    sku_width = max(
+        _display_width(sku_header),
+        min(max(_display_width(item.sku) for item in items), 20),
+    )
+    qty_width = max(
+        _display_width(qty_header),
+        max(_display_width(str(item.qty)) for item in items),
+    )
+    state_width = max(
+        _display_width(state_header),
+        min(max(_display_width(item.get_display_state(lang)) for item in items), 14),
+    )
+    notes_width = max(
+        _display_width(notes_header),
+        min(max(_display_width(item.get_display_notes(lang) or "-") for item in items), 22),
+    )
+
+    top = (
+        f"┌{'─' * (sku_width + 2)}┬{'─' * (qty_width + 2)}"
+        f"┬{'─' * (state_width + 2)}┬{'─' * (notes_width + 2)}┐"
+    )
+    header = (
+        f"│ {_fit_table_cell(sku_header, sku_width)} │ {_right_table_cell(qty_header, qty_width)} "
+        f"│ {_fit_table_cell(state_header, state_width)} │ {_fit_table_cell(notes_header, notes_width)} │"
+    )
+    separator = (
+        f"├{'─' * (sku_width + 2)}┼{'─' * (qty_width + 2)}"
+        f"┼{'─' * (state_width + 2)}┼{'─' * (notes_width + 2)}┤"
+    )
+    bottom = (
+        f"└{'─' * (sku_width + 2)}┴{'─' * (qty_width + 2)}"
+        f"┴{'─' * (state_width + 2)}┴{'─' * (notes_width + 2)}┘"
+    )
+
+    table_lines = [top, header, separator]
+
+    for item in items:
+        note_value = item.get_display_notes(lang) or {
+            "zh": "-",
+            "en": "-",
+            "ru": "-",
+        }.get(lang, "-")
+        table_lines.append(
+            f"│ {_fit_table_cell(item.sku, sku_width)} │ {_right_table_cell(str(item.qty), qty_width)} "
+            f"│ {_fit_table_cell(item.get_display_state(lang), state_width)} │ {_fit_table_cell(note_value, notes_width)} │"
+        )
+
+    table_lines.append(bottom)
+    return table_lines
+
+
+def _format_inventory_list(items: Sequence[InventoryItem], lang: str, max_length: int = 3200) -> str:
+    """将库存列表格式化为适合 Telegram 展示的表格."""
+    shown_count = len(items)
+
+    while shown_count > 0:
+        shown_items = items[:shown_count]
+        table_lines = _build_inventory_rows(shown_items, lang)
+        table_html = f"<pre>{escape(chr(10).join(table_lines))}</pre>"
+
+        more_html = ""
+        if shown_count < len(items):
+            more_html = "\n\n" + t(lang, "inventory_more").format(count=len(items) - shown_count)
+
+        inventory_html = table_html + more_html
+        if len(inventory_html) <= max_length:
+            return inventory_html
+
+        shown_count -= 1
+
+    table_lines = _build_inventory_rows(items[:1], lang)
+    return f"<pre>{escape(chr(10).join(table_lines))}</pre>"
 
 
 def _nav_buttons(back_target: str) -> list[list[InlineKeyboardButton]]:
@@ -253,16 +375,13 @@ async def _show_inventory(
         )
         return
 
-    # 拼接库存详情文本
-    inventory_texts = [item.format_display() for item in items]
-    inventory_list = "\n".join(inventory_texts)
+    inventory_list = _format_inventory_list(items, lang)
     
     text = t(lang, "inventory_title").format(
         name=name,
-        inventory_list=inventory_list
+        inventory_list=inventory_list,
     )
-    
-    # 限制文本长度，防止超出 Telegram 消息体限制 (约 4000 字符)
+
     if len(text) > 4000:
         text = text[:3900] + "\n\n...(省略多余内容，全部展示已截断)..."
 
