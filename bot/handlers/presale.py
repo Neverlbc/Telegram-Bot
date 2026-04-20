@@ -52,6 +52,10 @@ TEXTS = {
         "no_db": "⚠️ 数据库未连接，暂时无法查看。",
         "loading_error": "❌ 拉取库存失败，请稍后再试。",
         "contact_cs": "💬 联系客服",
+        "nav_back_upper": "◀️ 返回上级",
+        "nav_back_category": "◀️ 返回分类",
+        "nav_back_list": "◀️ 返回列表",
+        "nav_home": "🏠 主菜单",
     },
     "en": {
         "catalog_title": "📋 <b>Product Categories</b>\n\nSelect a category:",
@@ -68,6 +72,10 @@ TEXTS = {
         "no_db": "⚠️ Database unavailable.",
         "loading_error": "❌ Failed to load inventory, please try again later.",
         "contact_cs": "💬 Contact Support",
+        "nav_back_upper": "◀️ Back",
+        "nav_back_category": "◀️ Categories",
+        "nav_back_list": "◀️ Back to list",
+        "nav_home": "🏠 Main Menu",
     },
     "ru": {
         "catalog_title": "📋 <b>Категории</b>\n\nВыберите категорию:",
@@ -84,6 +92,10 @@ TEXTS = {
         "no_db": "⚠️ БД недоступна.",
         "loading_error": "❌ Не удалось загрузить наличие, попробуйте позже.",
         "contact_cs": "💬 Поддержка",
+        "nav_back_upper": "◀️ Назад",
+        "nav_back_category": "◀️ Категории",
+        "nav_back_list": "◀️ К списку",
+        "nav_home": "🏠 Главное меню",
     },
 }
 
@@ -225,15 +237,15 @@ def _format_inventory_list(items: Sequence[InventoryItem], lang: str, max_length
     return f"<pre>{escape(chr(10).join(table_lines))}</pre>"
 
 
-def _nav_buttons(back_target: str) -> list[list[InlineKeyboardButton]]:
+def _nav_buttons(back_target: str, lang: str) -> list[list[InlineKeyboardButton]]:
     """导航按钮行."""
     return [
         [InlineKeyboardButton(
-            text="◀️ 返回上级",
+            text=t(lang, "nav_back_upper"),
             callback_data=NavCallback(action="back", target=back_target).pack(),
         )],
         [InlineKeyboardButton(
-            text="🏠 主菜单",
+            text=t(lang, "nav_home"),
             callback_data=NavCallback(action="home").pack(),
         )],
     ]
@@ -306,7 +318,7 @@ async def _show_catalog(
                 callback_data=PresaleCallback(action=action, cat_id=cat_key).pack(),
             ))
 
-    for row in _nav_buttons("presale"):
+    for row in _nav_buttons("presale", lang):
         builder.row(*row)
 
     await callback.message.edit_text(  # type: ignore[union-attr]
@@ -339,11 +351,11 @@ async def _show_category(
         ))
 
     builder.row(InlineKeyboardButton(
-        text="◀️ 返回分类",
+        text=t(lang, "nav_back_category"),
         callback_data=PresaleCallback(action="catalog").pack(),
     ))
     builder.row(InlineKeyboardButton(
-        text="🏠 主菜单",
+        text=t(lang, "nav_home"),
         callback_data=NavCallback(action="home").pack(),
     ))
 
@@ -378,16 +390,16 @@ async def _show_inventory(
     
     if parent and not TOP_CATEGORIES.get(parent, {}).get("leaf"):
         builder.row(InlineKeyboardButton(
-            text="◀️ 返回上级",
+            text=t(lang, "nav_back_upper"),
             callback_data=PresaleCallback(action="category", cat_id=parent).pack(),
         ))
     else:
         builder.row(InlineKeyboardButton(
-            text="◀️ 返回分类",
+            text=t(lang, "nav_back_category"),
             callback_data=PresaleCallback(action="catalog").pack(),
         ))
     builder.row(InlineKeyboardButton(
-        text="🏠 主菜单",
+        text=t(lang, "nav_home"),
         callback_data=NavCallback(action="home").pack(),
     ))
 
@@ -424,7 +436,7 @@ async def _show_faq_list(
 
     builder = InlineKeyboardBuilder()
     if not items:
-        for row in _nav_buttons("presale"):
+        for row in _nav_buttons("presale", lang):
             builder.row(*row)
         await callback.message.edit_text(  # type: ignore[union-attr]
             t(lang, "faq_empty"),
@@ -438,7 +450,7 @@ async def _show_faq_list(
             text=f"❓ {q}",
             callback_data=PresaleCallback(action="faq_detail", faq_id=item.id).pack(),
         ))
-    for row in _nav_buttons("presale"):
+    for row in _nav_buttons("presale", lang):
         builder.row(*row)
 
     await callback.message.edit_text(  # type: ignore[union-attr]
@@ -466,11 +478,11 @@ async def _show_faq_detail(
     builder = InlineKeyboardBuilder()
     # 返回 FAQ 列表
     builder.row(InlineKeyboardButton(
-        text="◀️ 返回列表",
+        text=t(lang, "nav_back_list"),
         callback_data=PresaleCallback(action="faq").pack(),
     ))
     builder.row(InlineKeyboardButton(
-        text="🏠 主菜单",
+        text=t(lang, "nav_home"),
         callback_data=NavCallback(action="home").pack(),
     ))
 
@@ -490,7 +502,7 @@ async def _show_delivery_list(
 
     builder = InlineKeyboardBuilder()
     if not items:
-        for row in _nav_buttons("presale"):
+        for row in _nav_buttons("presale", lang):
             builder.row(*row)
         await callback.message.edit_text(  # type: ignore[union-attr]
             t(lang, "delivery_empty"),
@@ -504,7 +516,7 @@ async def _show_delivery_list(
             text=f"🚚 {q}",
             callback_data=PresaleCallback(action="delivery_detail", faq_id=item.id).pack(),
         ))
-    for row in _nav_buttons("presale"):
+    for row in _nav_buttons("presale", lang):
         builder.row(*row)
 
     await callback.message.edit_text(  # type: ignore[union-attr]
@@ -530,11 +542,11 @@ async def _show_delivery_detail(
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
-        text="◀️ 返回列表",
+        text=t(lang, "nav_back_list"),
         callback_data=PresaleCallback(action="delivery").pack(),
     ))
     builder.row(InlineKeyboardButton(
-        text="🏠 主菜单",
+        text=t(lang, "nav_home"),
         callback_data=NavCallback(action="home").pack(),
     ))
 

@@ -20,15 +20,21 @@ from bot.keyboards.callbacks import (
 
 # ── 导航按钮 ──────────────────────────────────────────
 
-def nav_buttons(back_target: str = "") -> list[list[InlineKeyboardButton]]:
+def nav_buttons(back_target: str = "", lang: str = "zh") -> list[list[InlineKeyboardButton]]:
     """生成统一的「返回上级」和「返回主菜单」按钮行."""
+    texts = {
+        "zh": {"back": "◀️ 返回上级菜单", "home": "🏠 返回主菜单"},
+        "en": {"back": "◀️ Back", "home": "🏠 Main Menu"},
+        "ru": {"back": "◀️ Назад", "home": "🏠 Главное меню"},
+    }
+    t = texts.get(lang, texts["zh"])
     return [
         [InlineKeyboardButton(
-            text="◀️ 返回上级菜单",
+            text=t["back"],
             callback_data=NavCallback(action="back", target=back_target).pack(),
         )],
         [InlineKeyboardButton(
-            text="🏠 返回主菜单",
+            text=t["home"],
             callback_data=NavCallback(action="home").pack(),
         )],
     ]
@@ -74,14 +80,14 @@ def settings_menu_keyboard(lang: str = "zh", show_profile: bool = True) -> Inlin
         builder.row(
             InlineKeyboardButton(text=t["lang"], callback_data=MenuCallback(action="setting_lang").pack()),
         )
-        for row in nav_buttons("menu"):
+        for row in nav_buttons("menu", lang):
             builder.row(*row)
     else:
         # 当已经在个人中心页面时，提供直接切换语言的快捷方式，并且后退目标改为设置首页
         builder.row(
             InlineKeyboardButton(text=t["lang"], callback_data=MenuCallback(action="setting_lang").pack()),
         )
-        for row in nav_buttons("settings"):
+        for row in nav_buttons("settings", lang):
             builder.row(*row)
             
     return builder.as_markup()
@@ -145,7 +151,7 @@ def presale_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(text=t["catalog"], callback_data=PresaleCallback(action="catalog").pack()))
     builder.row(InlineKeyboardButton(text=t["delivery"], callback_data=PresaleCallback(action="delivery").pack()))
     builder.row(InlineKeyboardButton(text=t["faq"], callback_data=PresaleCallback(action="faq").pack()))
-    for row in nav_buttons("menu"):
+    for row in nav_buttons("menu", lang):
         builder.row(*row)
     return builder.as_markup()
 
@@ -170,7 +176,7 @@ def aftersale_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(
         text=t["device"], callback_data=AftersaleCallback(action="device").pack(),
     ))
-    for row in nav_buttons("menu"):
+    for row in nav_buttons("menu", lang):
         builder.row(*row)
     return builder.as_markup()
 
@@ -192,7 +198,7 @@ def logistics_origin_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(
         text=t["china"], callback_data=LogisticsCallback(action="origin", origin="china").pack(),
     ))
-    for row in nav_buttons("aftersale"):
+    for row in nav_buttons("aftersale", lang):
         builder.row(*row)
     return builder.as_markup()
 
@@ -213,7 +219,7 @@ def logistics_carrier_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
             text=text,
             callback_data=LogisticsCallback(action="carrier", origin="moscow", carrier=carrier).pack(),
         ))
-    for row in nav_buttons("logistics"):
+    for row in nav_buttons("logistics", lang):
         builder.row(*row)
     return builder.as_markup()
 
@@ -238,7 +244,7 @@ def device_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(
         text=t["more"], callback_data=DeviceCallback(action="more").pack(),
     ))
-    for row in nav_buttons("aftersale"):
+    for row in nav_buttons("aftersale", lang):
         builder.row(*row)
     return builder.as_markup()
 
@@ -263,6 +269,6 @@ def support_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(
         text=t["human"], callback_data=SupportCallback(action="human").pack(),
     ))
-    for row in nav_buttons("menu"):
+    for row in nav_buttons("menu", lang):
         builder.row(*row)
     return builder.as_markup()
