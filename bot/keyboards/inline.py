@@ -195,19 +195,16 @@ def service_center_menu_keyboard(lang: str = "zh", service_link: str = "") -> In
             "info": "📄 服务中心说明",
             "link": "🔗 服务中心入口链接",
             "repair": "🔧 设备检修查询",
-            "admin": "🔐 管理员入口",
         },
         "en": {
             "info": "📄 Service Center Info",
             "link": "🔗 Service Center Link",
             "repair": "🔧 Device Repair Query",
-            "admin": "🔐 Admin Access",
         },
         "ru": {
             "info": "📄 О сервисном центре",
             "link": "🔗 Ссылка на сервисный центр",
             "repair": "🔧 Запрос ремонта",
-            "admin": "🔐 Вход для администратора",
         },
     }
     t = texts.get(lang, texts["zh"])
@@ -226,10 +223,6 @@ def service_center_menu_keyboard(lang: str = "zh", service_link: str = "") -> In
     builder.row(InlineKeyboardButton(
         text=t["repair"],
         callback_data=ServiceCenterCallback(action="repair").pack(),
-    ))
-    builder.row(InlineKeyboardButton(
-        text=t["admin"],
-        callback_data=ServiceCenterCallback(action="admin_enter").pack(),
     ))
     for row in nav_buttons("menu", lang):
         builder.row(*row)

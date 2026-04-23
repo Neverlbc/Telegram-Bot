@@ -14,6 +14,7 @@ import logging
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -257,35 +258,13 @@ async def on_cdek_no_input(
     await message.answer(text, reply_markup=builder.as_markup())
 
 
-# ── 管理员入口 ───────────────────────────────────────────
+# ── 管理员入口（文本密码触发，无按钮）────────────────────────
 
-@router.callback_query(ServiceCenterCallback.filter(F.action == "admin_enter"))
-async def on_admin_enter(
-    callback: CallbackQuery,
-    lang: str = "zh",
-    state: FSMContext | None = None,
-) -> None:
-    if not callback.message or not state:
-        return
-    await state.set_state(ServiceCenterStates.awaiting_admin_password)
-    await state.update_data(lang=lang)
-    await callback.message.edit_text(_t(lang, "enter_admin_pw"))
-    await callback.answer()
-
-
-@router.message(ServiceCenterStates.awaiting_admin_password)
+@router.message(StateFilter(default_state), F.text == settings.service_admin_password)
 async def on_admin_password(
     message: Message,
     lang: str = "zh",
-    state: FSMContext | None = None,
 ) -> None:
-    if not state:
-        return
-    entered = (message.text or "").strip()
-    if entered != settings.service_admin_password:
-        await message.answer(_t(lang, "wrong_admin_pw"))
-        return
-    await state.clear()
     await message.answer(_t(lang, "admin_title"), reply_markup=service_center_admin_keyboard(lang))
 
 
