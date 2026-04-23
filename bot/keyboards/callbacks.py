@@ -29,7 +29,9 @@ class PresaleCallback(CallbackData, prefix="presale"):
 class OrderCallback(CallbackData, prefix="order"):
     """售中下单."""
 
-    action: str  # wholesale / confirm / cancel
+    action: str  # category / wholesale / aliexpress / transfer / confirm / cancel
+    cat_id: str = ""    # 顶级分类 key (thermal / power)
+    sub: str = ""       # 子分类 (industrial / hunting / special)
 
 
 class AftersaleCallback(CallbackData, prefix="aftersale"):

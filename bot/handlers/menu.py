@@ -51,9 +51,9 @@ SETTINGS_TITLES = {
 }
 
 ORDER_TITLES = {
-    "zh": "📦 售中下单\n\n请输入您需要的商品数量和型号：\n\n（直接发送文字消息即可）",
-    "en": "📦 Place Order\n\nPlease enter product quantity and model:\n\n(Send text message directly)",
-    "ru": "📦 Заказ\n\nВведите количество и модель:\n\n(Отправьте текстовое сообщение)",
+    "zh": "📦 售中下单\n\n请选择产品类型：",
+    "en": "📦 Place Order\n\nSelect product type:",
+    "ru": "📦 Заказ\n\nВыберите тип продукта:",
 }
 
 
@@ -105,13 +105,12 @@ async def on_menu_action(
             reply_markup=presale_menu_keyboard(lang),
         )
     elif action == "order":
-        # 进入批发下单 FSM
-        from bot.states.order import OrderStates
+        # 售中下单 → 询问产品类型
+        from bot.keyboards.inline import order_product_type_keyboard
 
-        if state:
-            await state.set_state(OrderStates.awaiting_message)
         await callback.message.edit_text(
             ORDER_TITLES.get(lang, ORDER_TITLES["zh"]),
+            reply_markup=order_product_type_keyboard(lang),
         )
     elif action == "aftersale":
         await callback.message.edit_text(

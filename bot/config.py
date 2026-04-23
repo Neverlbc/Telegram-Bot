@@ -78,6 +78,13 @@ class Settings(BaseSettings):
     support_group_id: int = Field(0, description="普通客服群组 Telegram ID")
     escalation_agent_id: int = Field(0, description="特定人工客服 Telegram ID")
 
+    # ── 售中下单 — 分类转接 ────────────────────────────
+    order_agent_1_id: int = Field(0, description="售中特定人工1 (工业热成像)")
+    order_agent_2_id: int = Field(0, description="售中特定人工2 (狩猎/特殊热成像)")
+    aliexpress_store_url: str = Field(
+        "https://www.aliexpress.com", description="动力工具速卖通店铺链接"
+    )
+
     # ── 日志 ──────────────────────────────────────────
     log_level: str = Field("INFO")
     log_format: str = Field("json", description="日志格式: json / console")

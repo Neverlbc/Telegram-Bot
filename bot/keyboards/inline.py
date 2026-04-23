@@ -156,6 +156,64 @@ def presale_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+# ── 售中下单 — 产品类型选择 ────────────────────────────
+
+def order_product_type_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
+    """售中下单 — 询问产品类型."""
+    texts = {
+        "zh": {"thermal": "🌡 热成像仪", "power": "⚡ 动力工具", "wholesale": "📦 批发订单"},
+        "en": {"thermal": "🌡 Thermal Imager", "power": "⚡ Power Tools", "wholesale": "📦 Wholesale Order"},
+        "ru": {"thermal": "🌡 Тепловизор", "power": "⚡ Инструменты", "wholesale": "📦 Оптовый заказ"},
+    }
+    t = texts.get(lang, texts["zh"])
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=t["thermal"], callback_data=OrderCallback(action="category", cat_id="thermal").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=t["power"], callback_data=OrderCallback(action="aliexpress").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=t["wholesale"], callback_data=OrderCallback(action="wholesale").pack(),
+    ))
+    for row in nav_buttons("menu", lang):
+        builder.row(*row)
+    return builder.as_markup()
+
+
+def order_thermal_subcategory_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
+    """售中下单 — 热成像仪子分类选择."""
+    texts = {
+        "zh": {"industrial": "🏭 工业", "hunting": "🎯 狩猎", "special": "⭐ 特殊"},
+        "en": {"industrial": "🏭 Industrial", "hunting": "🎯 Hunting", "special": "⭐ Special"},
+        "ru": {"industrial": "🏭 Промышленные", "hunting": "🎯 Охота", "special": "⭐ Специальные"},
+    }
+    t = texts.get(lang, texts["zh"])
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=t["industrial"], callback_data=OrderCallback(action="transfer", sub="industrial").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=t["hunting"], callback_data=OrderCallback(action="transfer", sub="hunting").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=t["special"], callback_data=OrderCallback(action="transfer", sub="special").pack(),
+    ))
+    # 返回上级 → 产品类型选择
+    back_texts = {
+        "zh": "◀️ 返回产品类型", "en": "◀️ Back", "ru": "◀️ Назад",
+    }
+    builder.row(InlineKeyboardButton(
+        text=back_texts.get(lang, back_texts["zh"]),
+        callback_data=OrderCallback(action="category", cat_id="back").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 返回主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 返回主菜单"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+    return builder.as_markup()
+
+
 # ── 售后支持入口 ──────────────────────────────────────
 
 def aftersale_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:

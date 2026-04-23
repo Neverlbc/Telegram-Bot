@@ -8,4 +8,4 @@ from aiogram.fsm.state import State, StatesGroup
 class OrderStates(StatesGroup):
     """批发下单流程状态."""
 
-    awaiting_message = State()  # 等待用户输入数量和型号
+    awaiting_message = State()  # 等待用户输入批发订单的数量和型号
