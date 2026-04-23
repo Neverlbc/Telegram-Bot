@@ -4,7 +4,6 @@ services:
   # ── Bot 应用 ────────────────────────────────────────
   bot:
     build: .
-    container_name: telegram-bot
     restart: unless-stopped
     env_file:
       - .env
@@ -24,7 +23,6 @@ services:
   # ── MySQL 数据库 ────────────────────────────────────
   mysql:
     image: mysql:8.0
-    container_name: telegram-bot-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
@@ -51,7 +49,6 @@ services:
   # ── Redis 缓存 ──────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: telegram-bot-redis
     restart: unless-stopped
     command: >
       redis-server
@@ -74,7 +71,6 @@ services:
   # ── 库存同步定时任务 ────────────────────────────────────
   inventory-sync:
     build: .
-    container_name: telegram-bot-sync
     restart: unless-stopped
     env_file:
       - .env
@@ -91,7 +87,6 @@ services:
   # ── 服务中心检修状态监听 ─────────────────────────────────
   repair-monitor:
     build: .
-    container_name: telegram-bot-repair-monitor
     restart: unless-stopped
     env_file:
       - .env
