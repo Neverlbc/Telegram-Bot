@@ -31,9 +31,13 @@ ENV PATH=/root/.local/bin:$PATH
 # 复制应用代码
 COPY . .
 
+# 入口脚本（自动迁移 + 启动）
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD python -c "import sys; sys.exit(0)" || exit 1
 
-# 启动命令
-CMD ["python", "-m", "bot"]
+# 启动命令 — 通过 entrypoint 自动执行 Alembic 迁移
+ENTRYPOINT ["/entrypoint.sh"]
