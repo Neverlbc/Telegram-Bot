@@ -29,8 +29,6 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-telegram_bot}
       MYSQL_USER: ${MYSQL_USER:-bot_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-bot_password}
-    ports:
-      - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -56,8 +54,6 @@ services:
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD:-}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
