@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -135,17 +136,24 @@ def t(lang: str, key: str) -> str:
     return TEXTS.get(lang, TEXTS["zh"]).get(key, TEXTS["zh"][key])
 
 
-def _agent_url() -> str:
-    """构建人工客服 Telegram 链接."""
-    return f"https://t.me/{settings.human_agent_username}"
+def _agent_url(prefill: str = "") -> str:
+    """构建人工客服 Telegram 链接，支持预填消息.
+
+    使用 https://t.me/USERNAME?text=MESSAGE 格式，
+    用户点击后聊天输入框自动填入内容。
+    """
+    base = f"https://t.me/{settings.human_agent_username}"
+    if prefill:
+        return f"{base}?text={quote(prefill)}"
+    return base
 
 
-def _transfer_keyboard(lang: str) -> InlineKeyboardBuilder:
-    """转人工通用键盘: 联系客服链接 + 返回主菜单."""
+def _transfer_keyboard(lang: str, prefill: str = "") -> InlineKeyboardBuilder:
+    """转人工通用键盘: 联系客服链接(预填消息) + 返回主菜单."""
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text=t(lang, "contact_agent").format(username=settings.human_agent_username),
-        url=_agent_url(),
+        url=_agent_url(prefill),
     ))
     builder.row(InlineKeyboardButton(
         text=t(lang, "nav_home"),
@@ -258,11 +266,19 @@ async def _on_wholesale_start(
 async def _on_transfer(
     callback: CallbackQuery, data: OrderCallback, lang: str,
 ) -> None:
-    """热成像仪子分类 → 展示联系客服链接."""
+    """热成像仪子分类 → 展示联系客服链接（预填分类信息）."""
     sub = data.sub
     sub_name = SUB_NAMES.get(lang, SUB_NAMES["zh"]).get(sub, sub)
 
-    kb = _transfer_keyboard(lang)
+    # 预填消息: 让客服知道用户想咨询什么分类
+    prefill_msgs = {
+        "zh": f"你好，我想咨询 {sub_name}，请提供详细信息和报价。",
+        "en": f"Hi, I'm interested in {sub_name}. Please provide details and pricing.",
+        "ru": f"Здравствуйте, интересует {sub_name}. Пришлите информацию и цены.",
+    }
+    prefill = prefill_msgs.get(lang, prefill_msgs["zh"])
+
+    kb = _transfer_keyboard(lang, prefill=prefill)
     await callback.message.edit_text(  # type: ignore[union-attr]
         t(lang, "transfer_title").format(category=sub_name),
         reply_markup=kb.as_markup(),
@@ -292,8 +308,16 @@ async def on_wholesale_message(
     # 清除 FSM 状态
     await state.clear()
 
-    # 回复用户，附带联系客服链接
-    kb = _transfer_keyboard(lang)
+    # 预填消息: 把用户的批发留言带到客服对话
+    prefill_msgs = {
+        "zh": f"你好，我想批发下单：\n{user_text}",
+        "en": f"Hi, I'd like to place a wholesale order:\n{user_text}",
+        "ru": f"Здравствуйте, оптовый заказ:\n{user_text}",
+    }
+    prefill = prefill_msgs.get(lang, prefill_msgs["zh"])
+
+    # 回复用户，附带联系客服链接（预填留言内容）
+    kb = _transfer_keyboard(lang, prefill=prefill)
     await message.answer(
         t(lang, "wholesale_sent").format(message=user_text),
         reply_markup=kb.as_markup(),
