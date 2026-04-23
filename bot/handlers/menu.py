@@ -39,9 +39,9 @@ AFTERSALE_TITLES = {
 }
 
 SUPPORT_TITLES = {
-    "zh": "💬 客服与合作\n\n请选择：",
-    "en": "💬 Support & Cooperation\n\nPlease select:",
-    "ru": "💬 Поддержка\n\nВыберите:",
+    "zh": "🤝 需要合作\n\n请选择您的身份：",
+    "en": "🤝 Cooperation\n\nSelect your role:",
+    "ru": "🤝 Сотрудничество\n\nВыберите вашу роль:",
 }
 
 SETTINGS_TITLES = {

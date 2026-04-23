@@ -60,7 +60,7 @@ class DeviceCallback(CallbackData, prefix="device"):
 class SupportCallback(CallbackData, prefix="support"):
     """客服合作."""
 
-    action: str  # business / wholesale / human / back
+    action: str  # blogger / wholesaler / huntclub
 
 
 class NavCallback(CallbackData, prefix="nav"):

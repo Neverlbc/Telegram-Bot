@@ -102,21 +102,21 @@ def main_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
             "presale": "🛍 售前咨询",
             "order": "📦 售中下单",
             "aftersale": "🔧 售后支持",
-            "support": "💬 客服合作",
+            "support": "🤝 需要合作",
             "settings": "⚙️ 设置",
         },
         "en": {
             "presale": "🛍 Pre-sale",
             "order": "📦 Order",
             "aftersale": "🔧 After-sale",
-            "support": "💬 Support",
+            "support": "🤝 Cooperation",
             "settings": "⚙️ Settings",
         },
         "ru": {
             "presale": "🛍 Консультация",
             "order": "📦 Заказ",
             "aftersale": "🔧 Поддержка",
-            "support": "💬 Сервис",
+            "support": "🤝 Сотрудничество",
             "settings": "⚙️ Настройки",
         },
     }
@@ -310,22 +310,22 @@ def device_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
 # ── 客服合作 ──────────────────────────────────────────
 
 def support_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
-    """客服合作键盘."""
+    """客服合作键盘 — 我是博主 / 我是批发商 / 狩猎俱乐部."""
     texts = {
-        "zh": {"business": "🤝 商务合作", "wholesale": "📦 我要批发", "human": "👤 转接人工"},
-        "en": {"business": "🤝 Business", "wholesale": "📦 Wholesale", "human": "👤 Live Agent"},
-        "ru": {"business": "🤝 Партнёрство", "wholesale": "📦 Оптом", "human": "👤 Оператор"},
+        "zh": {"blogger": "📣 我是博主", "wholesaler": "📦 我是批发商", "huntclub": "🎯 狩猎俱乐部"},
+        "en": {"blogger": "📣 I'm a Blogger", "wholesaler": "📦 I'm a Wholesaler", "huntclub": "🎯 Hunting Club"},
+        "ru": {"blogger": "📣 Блогер", "wholesaler": "📦 Оптовик", "huntclub": "🎯 Охотничий клуб"},
     }
     t = texts.get(lang, texts["zh"])
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
-        text=t["business"], callback_data=SupportCallback(action="business").pack(),
+        text=t["blogger"], callback_data=SupportCallback(action="blogger").pack(),
     ))
     builder.row(InlineKeyboardButton(
-        text=t["wholesale"], callback_data=SupportCallback(action="wholesale").pack(),
+        text=t["wholesaler"], callback_data=SupportCallback(action="wholesaler").pack(),
     ))
     builder.row(InlineKeyboardButton(
-        text=t["human"], callback_data=SupportCallback(action="human").pack(),
+        text=t["huntclub"], callback_data=SupportCallback(action="huntclub").pack(),
     ))
     for row in nav_buttons("menu", lang):
         builder.row(*row)
