@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import ErrorEvent
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -90,8 +91,8 @@ def create_dispatcher(redis: Redis | None = None) -> Dispatcher:  # type: ignore
 
     # ── 全局错误处理 ─────────────────────────────────
     @dp.error()
-    async def global_error_handler(event, exception) -> bool:  # type: ignore[no-untyped-def]
-        logger.exception("Unhandled error: %s", exception)
+    async def global_error_handler(event: ErrorEvent) -> bool:
+        logger.exception("Unhandled error: %s", event.exception)
         return True
 
     return dp
