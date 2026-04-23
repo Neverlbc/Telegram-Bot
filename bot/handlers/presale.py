@@ -377,13 +377,6 @@ async def _show_inventory(
     items = await get_inventory(sheet_key)
     builder = InlineKeyboardBuilder()
 
-    # 联系客服
-    from bot.keyboards.callbacks import SupportCallback
-    builder.row(InlineKeyboardButton(
-        text=t(lang, "contact_cs"),
-        callback_data=SupportCallback(action="human").pack(),
-    ))
-
     # 返回导航 (如果有父分类就返回，否则返回主目录)
     config = SHEET_CONFIG.get(sheet_key, {})
     parent = config.get("parent")
