@@ -65,23 +65,19 @@ class InventoryItem:
         return self.net_qty > 0
 
     def get_display_state(self, lang: str = "zh") -> str:
-        """获取展示用库存状态."""
-        if self.qty == 0:
+        """获取展示用库存状态: qty > 0 有货, qty == 0 缺货."""
+        if self.qty > 0:
             labels = {
-                "zh": "缺货",
-                "en": "Out of stock",
-                "ru": "распродано",
+                "zh": "有货",
+                "en": "Available",
+                "ru": "В наличии",
             }
             return labels.get(lang, labels["zh"])
 
-        normalized = self._normalize_state(lang)
-        if normalized:
-            return normalized
-
         labels = {
-            "zh": "有货",
-            "en": "In stock",
-            "ru": "В наличии",
+            "zh": "缺货",
+            "en": "Out of stock",
+            "ru": "распродано",
         }
         return labels.get(lang, labels["zh"])
 
