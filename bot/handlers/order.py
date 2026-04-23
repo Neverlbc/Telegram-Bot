@@ -3,10 +3,10 @@
 流程（来自设计稿粉色部分）：
   售中下单 → 询问产品类型
   ├── 热成像仪 → 选子类
-  │   ├── 工业      → 转特定人工 1
-  │   └── 狩猎/特殊  → 转特定人工 2
+  │   ├── 工业      → 转人工 (@ABFOfficialGroup)
+  │   └── 狩猎/特殊  → 转人工 (@ABFOfficialGroup)
   ├── 动力工具 → 跳转速卖通店铺
-  └── 批发订单 → 留言数量和型号 → 带留言转人工
+  └── 批发订单 → 留言数量和型号 → 转人工 (@ABFOfficialGroup)
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from bot.keyboards.inline import (
     order_product_type_keyboard,
     order_thermal_subcategory_keyboard,
 )
-from bot.services.notification import notification_service
 from bot.states.order import OrderStates
 
 logger = logging.getLogger(__name__)
@@ -48,28 +47,17 @@ TEXTS = {
             "（直接发送文字消息即可，例如：\n"
             "<i>DP9 工业热成像仪 × 20台</i>）"
         ),
-        "transfer_success": (
-            "✅ 您的需求已转接到专属客服。\n\n"
-            "客服将在工作时间内尽快回复，请耐心等待。\n"
-            "如有紧急问题，请直接联系客服。"
+        "transfer_title": (
+            "✅ <b>{category}</b>\n\n"
+            "请点击下方按钮联系专属客服，\n"
+            "客服将为您提供详细的产品信息和报价。"
         ),
-        "transfer_fail": "⚠️ 转接失败，请稍后重试或联系管理员。",
         "wholesale_sent": (
-            "✅ 您的批发订单留言已提交！\n\n"
+            "✅ 您的批发订单留言已记录！\n\n"
             "📝 <b>留言内容：</b>\n<i>{message}</i>\n\n"
-            "客服将在工作时间内尽快回复。"
+            "请点击下方按钮联系客服，告知您已提交留言。"
         ),
-        "wholesale_cancel": "❌ 已取消批发下单。",
-        "agent_notify": (
-            "📦 <b>售中下单 — {category}</b>\n\n"
-            "👤 用户: {user_name} (ID: <code>{user_id}</code>)\n"
-            "📂 分类: {category}\n"
-        ),
-        "agent_wholesale_notify": (
-            "📦 <b>批发订单留言</b>\n\n"
-            "👤 用户: {user_name} (ID: <code>{user_id}</code>)\n"
-            "📝 留言: <i>{message}</i>\n"
-        ),
+        "contact_agent": "💬 联系客服 @{username}",
         "shop_btn": "🛒 前往速卖通店铺",
         "nav_back_type": "◀️ 返回产品类型",
         "nav_home": "🏠 返回主菜单",
@@ -88,27 +76,17 @@ TEXTS = {
             "(Send a text message, e.g.:\n"
             "<i>DP9 Thermal Imager × 20pcs</i>)"
         ),
-        "transfer_success": (
-            "✅ Your request has been forwarded.\n\n"
-            "Our agent will reply ASAP during business hours."
+        "transfer_title": (
+            "✅ <b>{category}</b>\n\n"
+            "Please click below to contact our agent\n"
+            "for detailed product info and pricing."
         ),
-        "transfer_fail": "⚠️ Transfer failed, please try again later.",
         "wholesale_sent": (
-            "✅ Your wholesale order has been submitted!\n\n"
+            "✅ Your wholesale order has been recorded!\n\n"
             "📝 <b>Message:</b>\n<i>{message}</i>\n\n"
-            "Our agent will reply ASAP."
+            "Please click below to contact our agent."
         ),
-        "wholesale_cancel": "❌ Wholesale order cancelled.",
-        "agent_notify": (
-            "📦 <b>Order — {category}</b>\n\n"
-            "👤 User: {user_name} (ID: <code>{user_id}</code>)\n"
-            "📂 Category: {category}\n"
-        ),
-        "agent_wholesale_notify": (
-            "📦 <b>Wholesale Order</b>\n\n"
-            "👤 User: {user_name} (ID: <code>{user_id}</code>)\n"
-            "📝 Message: <i>{message}</i>\n"
-        ),
+        "contact_agent": "💬 Contact @{username}",
         "shop_btn": "🛒 Visit AliExpress Store",
         "nav_back_type": "◀️ Back to types",
         "nav_home": "🏠 Main Menu",
@@ -127,27 +105,17 @@ TEXTS = {
             "(Отправьте текст, например:\n"
             "<i>DP9 Тепловизор × 20шт</i>)"
         ),
-        "transfer_success": (
-            "✅ Ваш запрос передан менеджеру.\n\n"
-            "Менеджер ответит в рабочее время."
+        "transfer_title": (
+            "✅ <b>{category}</b>\n\n"
+            "Нажмите ниже, чтобы связаться с менеджером\n"
+            "для получения информации и цен."
         ),
-        "transfer_fail": "⚠️ Ошибка, попробуйте позже.",
         "wholesale_sent": (
-            "✅ Ваш заказ отправлен!\n\n"
+            "✅ Ваш заказ записан!\n\n"
             "📝 <b>Сообщение:</b>\n<i>{message}</i>\n\n"
-            "Менеджер ответит в рабочее время."
+            "Нажмите ниже, чтобы связаться с менеджером."
         ),
-        "wholesale_cancel": "❌ Заказ отменён.",
-        "agent_notify": (
-            "📦 <b>Заказ — {category}</b>\n\n"
-            "👤 Пользователь: {user_name} (ID: <code>{user_id}</code>)\n"
-            "📂 Категория: {category}\n"
-        ),
-        "agent_wholesale_notify": (
-            "📦 <b>Оптовый заказ</b>\n\n"
-            "👤 Пользователь: {user_name} (ID: <code>{user_id}</code>)\n"
-            "📝 Сообщение: <i>{message}</i>\n"
-        ),
+        "contact_agent": "💬 Написать @{username}",
         "shop_btn": "🛒 AliExpress",
         "nav_back_type": "◀️ Назад",
         "nav_home": "🏠 Главное меню",
@@ -167,22 +135,18 @@ def t(lang: str, key: str) -> str:
     return TEXTS.get(lang, TEXTS["zh"]).get(key, TEXTS["zh"][key])
 
 
-def _user_display(from_user) -> str:  # type: ignore[no-untyped-def]
-    """构建用户名展示."""
-    parts = []
-    if from_user.first_name:
-        parts.append(from_user.first_name)
-    if from_user.last_name:
-        parts.append(from_user.last_name)
-    name = " ".join(parts) or "Unknown"
-    if from_user.username:
-        name += f" (@{from_user.username})"
-    return name
+def _agent_url() -> str:
+    """构建人工客服 Telegram 链接."""
+    return f"https://t.me/{settings.human_agent_username}"
 
 
-def _home_keyboard(lang: str) -> InlineKeyboardBuilder:
-    """返回主菜单按钮."""
+def _transfer_keyboard(lang: str) -> InlineKeyboardBuilder:
+    """转人工通用键盘: 联系客服链接 + 返回主菜单."""
     builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=t(lang, "contact_agent").format(username=settings.human_agent_username),
+        url=_agent_url(),
+    ))
     builder.row(InlineKeyboardButton(
         text=t(lang, "nav_home"),
         callback_data=NavCallback(action="home").pack(),
@@ -289,46 +253,21 @@ async def _on_wholesale_start(
     )
 
 
-# ── 热成像仪子分类 → 转特定人工 ────────────────────────
+# ── 热成像仪子分类 → 转人工 ────────────────────────────
 
 async def _on_transfer(
     callback: CallbackQuery, data: OrderCallback, lang: str,
 ) -> None:
-    """热成像仪子分类点击 → 通知对应客服."""
+    """热成像仪子分类 → 展示联系客服链接."""
     sub = data.sub
-    from_user = callback.from_user
-
-    # 根据子分类决定转接对象
-    if sub == "industrial":
-        agent_id = settings.order_agent_1_id
-    else:
-        # hunting / special → 特定人工 2
-        agent_id = settings.order_agent_2_id
-
     sub_name = SUB_NAMES.get(lang, SUB_NAMES["zh"]).get(sub, sub)
 
-    # 向客服发送通知
-    notify_text = t(lang, "agent_notify").format(
-        category=sub_name,
-        user_name=_user_display(from_user),
-        user_id=from_user.id,
+    kb = _transfer_keyboard(lang)
+    await callback.message.edit_text(  # type: ignore[union-attr]
+        t(lang, "transfer_title").format(category=sub_name),
+        reply_markup=kb.as_markup(),
     )
-    result = await notification_service.notify_agent(agent_id, notify_text)
-
-    # 向用户反馈
-    kb = _home_keyboard(lang)
-    if result:
-        await callback.message.edit_text(  # type: ignore[union-attr]
-            t(lang, "transfer_success"),
-            reply_markup=kb.as_markup(),
-        )
-        logger.info("Order transfer: user=%s sub=%s → agent=%s", from_user.id, sub, agent_id)
-    else:
-        await callback.message.edit_text(  # type: ignore[union-attr]
-            t(lang, "transfer_fail"),
-            reply_markup=kb.as_markup(),
-        )
-        logger.warning("Order transfer failed: user=%s sub=%s agent=%s", from_user.id, sub, agent_id)
+    logger.info("Order transfer: user=%s sub=%s → @%s", callback.from_user.id, sub, settings.human_agent_username)
 
 
 # ── FSM: 接收批发订单留言 ──────────────────────────────
@@ -339,7 +278,7 @@ async def on_wholesale_message(
     state: FSMContext,
     lang: str = "zh",
 ) -> None:
-    """收到用户的批发订单文本留言 → 转发到客服群组."""
+    """收到用户的批发订单文本留言 → 展示联系客服链接."""
     user_text = message.text or ""
     from_user = message.from_user
 
@@ -353,36 +292,10 @@ async def on_wholesale_message(
     # 清除 FSM 状态
     await state.clear()
 
-    # 1. 构建通知文本
-    notify_text = t(lang, "agent_wholesale_notify").format(
-        user_name=_user_display(from_user),
-        user_id=from_user.id,
-        message=user_text,
+    # 回复用户，附带联系客服链接
+    kb = _transfer_keyboard(lang)
+    await message.answer(
+        t(lang, "wholesale_sent").format(message=user_text),
+        reply_markup=kb.as_markup(),
     )
-
-    # 2. 发送到客服群组
-    result = await notification_service.notify_support_group(notify_text)
-
-    # 3. 也转发原始消息
-    if message.chat and message.message_id:
-        await notification_service.forward_to_support(
-            chat_id=message.chat.id,
-            message_id=message.message_id,
-        )
-
-    # 4. 回复用户
-    from bot.keyboards.inline import main_menu_keyboard
-
-    if result:
-        await message.answer(
-            t(lang, "wholesale_sent").format(message=user_text),
-            reply_markup=main_menu_keyboard(lang),
-        )
-        logger.info("Wholesale order from user=%s: %s", from_user.id, user_text[:100])
-    else:
-        # 即使通知群组失败，也给用户友好提示
-        await message.answer(
-            t(lang, "wholesale_sent").format(message=user_text),
-            reply_markup=main_menu_keyboard(lang),
-        )
-        logger.warning("Wholesale notification failed for user=%s", from_user.id)
+    logger.info("Wholesale order from user=%s: %s", from_user.id, user_text[:100])

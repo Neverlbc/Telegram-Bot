@@ -79,8 +79,7 @@ class Settings(BaseSettings):
     escalation_agent_id: int = Field(0, description="特定人工客服 Telegram ID")
 
     # ── 售中下单 — 分类转接 ────────────────────────────
-    order_agent_1_id: int = Field(0, description="售中特定人工1 (工业热成像)")
-    order_agent_2_id: int = Field(0, description="售中特定人工2 (狩猎/特殊热成像)")
+    human_agent_username: str = Field("ABFOfficialGroup", description="统一人工客服 Telegram 用户名 (不带@)")
     aliexpress_store_url: str = Field(
         "https://www.aliexpress.com", description="动力工具速卖通店铺链接"
     )
