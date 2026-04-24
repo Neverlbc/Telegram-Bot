@@ -28,6 +28,7 @@ from bot.keyboards.inline import (
 from bot.services.service_center_sheet import (
     get_all_records,
     get_repair_status,
+    get_repair_status_by_sn,
     register_watcher,
 )
 from bot.services.sn_sheet import search_sn
@@ -54,8 +55,8 @@ TEXTS: dict[str, dict[str, str]] = {
             "💬 由于服务中心工作量较大，回复可能会有所延迟。我们所有员工均为来自俄罗斯的俄语专家。我们会在工作时间内按先到先得的原则回复您。\n\n"
             "感谢您的理解和耐心！"
         ),
-        "enter_cdek": "🔧 <b>设备检修查询</b>\n\n请输入您寄件的 CDEK 单号：",
-        "cdek_not_found": "❓ 未找到单号 <code>{cdek_no}</code> 的记录。\n\n请确认单号是否正确，或联系客服：",
+        "enter_cdek": "🔧 <b>设备检修查询</b>\n\n请输入您寄件的 CDEK 单号，或设备序列号（SN）：",
+        "cdek_not_found": "❓ 未找到 <code>{cdek_no}</code> 的记录。\n\n请确认 CDEK 单号或序列号是否正确，或联系客服：",
         "cdek_result": (
             "🔧 <b>检修状态查询结果</b>\n\n"
             "CDEK 单号：<code>{cdek_in}</code>\n"
@@ -63,9 +64,11 @@ TEXTS: dict[str, dict[str, str]] = {
             "序列号：{sn}\n"
             "检修状态：{emoji} {status}\n"
             "{cdek_out_line}"
+            "{repair_summary_line}"
             "\n✅ 已订阅状态更新，有变更时将自动通知您。"
         ),
         "cdek_out_line": "回寄单号：<code>{cdek_out}</code>\n",
+        "repair_summary_line": "维修报告：{summary}\n",
         "enter_admin_pw": "🔐 请输入管理员密码：",
         "wrong_admin_pw": "❌ 密码错误。",
         "admin_title": "🔐 <b>服务中心管理后台</b>\n\n请选择操作：",
@@ -94,8 +97,8 @@ TEXTS: dict[str, dict[str, str]] = {
             "We will respond to you during business hours on a first-come, first-served basis.\n\n"
             "Thank you for your understanding and patience!"
         ),
-        "enter_cdek": "🔧 <b>Device Repair Query</b>\n\nPlease enter your outgoing CDEK tracking number:",
-        "cdek_not_found": "❓ No record found for <code>{cdek_no}</code>.\n\nPlease verify the number or contact support:",
+        "enter_cdek": "🔧 <b>Device Repair Query</b>\n\nPlease enter your outgoing CDEK tracking number or device serial number (SN):",
+        "cdek_not_found": "❓ No record found for <code>{cdek_no}</code>.\n\nPlease verify the CDEK number or SN, or contact support:",
         "cdek_result": (
             "🔧 <b>Repair Status</b>\n\n"
             "CDEK No.: <code>{cdek_in}</code>\n"
@@ -103,9 +106,11 @@ TEXTS: dict[str, dict[str, str]] = {
             "SN: {sn}\n"
             "Status: {emoji} {status}\n"
             "{cdek_out_line}"
+            "{repair_summary_line}"
             "\n✅ Subscribed to updates — you'll be notified on any change."
         ),
         "cdek_out_line": "Return CDEK No.: <code>{cdek_out}</code>\n",
+        "repair_summary_line": "Repair Report: {summary}\n",
         "enter_admin_pw": "🔐 Enter admin password:",
         "wrong_admin_pw": "❌ Incorrect password.",
         "admin_title": "🔐 <b>Service Center Admin</b>\n\nSelect an action:",
@@ -134,8 +139,8 @@ TEXTS: dict[str, dict[str, str]] = {
             "Мы ответим вам в рабочее время в порядке очереди.\n\n"
             "Спасибо за понимание и терпение！"
         ),
-        "enter_cdek": "🔧 <b>Запрос ремонта</b>\n\nВведите номер CDEK вашего отправления:",
-        "cdek_not_found": "❓ Запись для <code>{cdek_no}</code> не найдена.\n\nПроверьте номер или обратитесь в поддержку:",
+        "enter_cdek": "🔧 <b>Запрос ремонта</b>\n\nВведите номер CDEK вашего отправления или серийный номер устройства (SN):",
+        "cdek_not_found": "❓ Запись для <code>{cdek_no}</code> не найдена.\n\nПроверьте номер CDEK или SN, или обратитесь в поддержку:",
         "cdek_result": (
             "🔧 <b>Статус ремонта</b>\n\n"
             "Номер CDEK: <code>{cdek_in}</code>\n"
@@ -143,9 +148,11 @@ TEXTS: dict[str, dict[str, str]] = {
             "Серийный номер: {sn}\n"
             "Статус: {emoji} {status}\n"
             "{cdek_out_line}"
+            "{repair_summary_line}"
             "\n✅ Вы подписаны на обновления — уведомим при изменении."
         ),
         "cdek_out_line": "Номер CDEK для возврата: <code>{cdek_out}</code>\n",
+        "repair_summary_line": "Отчёт о ремонте: {summary}\n",
         "enter_admin_pw": "🔐 Введите пароль администратора:",
         "wrong_admin_pw": "❌ Неверный пароль.",
         "admin_title": "🔐 <b>Панель администратора</b>\n\nВыберите действие:",
@@ -238,11 +245,11 @@ async def on_cdek_no_input(
 ) -> None:
     if not state:
         return
-    cdek_no = (message.text or "").strip()
+    query = (message.text or "").strip()
     await state.clear()
 
     try:
-        record = await get_repair_status(cdek_no)
+        record = await get_repair_status(query) or await get_repair_status_by_sn(query)
     except Exception as e:
         logger.error("get_repair_status failed: %s", e)
         await message.answer(_t(lang, "loading_err"))
@@ -253,22 +260,26 @@ async def on_cdek_no_input(
         builder.row(*row)
 
     if not record:
-        prefill = {"zh": f"你好，我查询单号 {cdek_no} 未找到记录", "en": f"Hi, tracking {cdek_no} not found", "ru": f"Привет, трек {cdek_no} не найден"}.get(lang, f"Track {cdek_no} not found")
+        prefill = {"zh": f"你好，我查询 {query} 未找到记录", "en": f"Hi, no record found for {query}", "ru": f"Привет, запись для {query} не найдена"}.get(lang, f"No record for {query}")
         builder.row(InlineKeyboardButton(text=_t(lang, "contact_cs"), url=_agent_url(prefill)))
         await message.answer(
-            _t(lang, "cdek_not_found").format(cdek_no=cdek_no),
+            _t(lang, "cdek_not_found").format(cdek_no=query),
             reply_markup=builder.as_markup(),
         )
         return
 
-    # 注册状态监听（记录语言用于推送通知）
+    # 注册状态监听（使用记录中的实际 CDEK 单号作为 key）
     user_id = message.from_user.id if message.from_user else 0
     if user_id:
-        await register_watcher(cdek_no, user_id, lang)
+        await register_watcher(record.cdek_in, user_id, lang)
 
     cdek_out_line = ""
-    if record.cdek_out:
-        cdek_out_line = _t(lang, "cdek_out_line").format(cdek_out=record.cdek_out)
+    repair_summary_line = ""
+    if record.status.strip().lower() == "done":
+        if record.cdek_out:
+            cdek_out_line = _t(lang, "cdek_out_line").format(cdek_out=record.cdek_out)
+        if record.repair_summary:
+            repair_summary_line = _t(lang, "repair_summary_line").format(summary=record.repair_summary)
 
     text = _t(lang, "cdek_result").format(
         cdek_in=record.cdek_in,
@@ -277,6 +288,7 @@ async def on_cdek_no_input(
         emoji=record.status_emoji(),
         status=record.status or "-",
         cdek_out_line=cdek_out_line,
+        repair_summary_line=repair_summary_line,
     )
     await message.answer(text, reply_markup=builder.as_markup())
 

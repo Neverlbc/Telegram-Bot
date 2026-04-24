@@ -27,13 +27,14 @@ SHEETS_CSV_URL = (
 CACHE_TTL = 120  # 2 分钟（状态查询需要更新鲜）
 
 # 列名配置 — 与实际 Sheet 表头对应（After sales management tab）
-COL_CDEK_IN = "Send tracking number"        # G: 客户寄件单号（查询关键字）
-COL_SN = "SN"                               # B
-COL_MODEL = "SKU Name"                      # A
-COL_STATUS = "State"                        # H: Done / In Progress
-COL_CUSTOMER_TG = ""                        # 表格无此列，用 Redis watcher 替代
-COL_CDEK_OUT = "Repair completion tracking number"  # I: 回寄单号（列名待确认）
-COL_NOTES = "Detailed information"          # E
+COL_CDEK_IN  = "Send tracking number"              # G: 客户寄件单号
+COL_SN       = "SN"                                # B: 设备序列号
+COL_MODEL    = "SKU Name"                          # A: 设备型号
+COL_STATUS   = "State"                             # H: Done / In Progress
+COL_CDEK_OUT = "Repair completion tracking number" # I: 回寄单号
+COL_SUMMARY  = "Repair Report Summary"             # J: 维修报告摘要
+COL_NOTES    = "Detailed information"              # E: 故障说明
+COL_CUSTOMER_TG = ""                               # 无此列，用 Redis watcher 替代
 
 SC_GID = 1205973697  # After sales management tab
 
@@ -53,9 +54,10 @@ class RepairRecord:
     sn: str = ""
     model: str = ""
     status: str = ""
-    customer_tg_id: str = ""
-    cdek_out: str = ""    # 回寄单号，空 = 尚未寄回
+    cdek_out: str = ""        # 回寄单号，空 = 尚未寄回
+    repair_summary: str = ""  # 维修报告摘要（Done 时展示）
     notes: str = ""
+    customer_tg_id: str = ""  # 无对应列，保留用于兼容
 
     def status_emoji(self) -> str:
         s = self.status.strip().lower()
@@ -82,8 +84,8 @@ def _parse_csv(csv_text: str) -> list[RepairRecord]:
             sn=row.get(COL_SN, "").strip(),
             model=row.get(COL_MODEL, "").strip(),
             status=row.get(COL_STATUS, "").strip(),
-            customer_tg_id=row.get(COL_CUSTOMER_TG, "").strip(),
             cdek_out=row.get(COL_CDEK_OUT, "").strip(),
+            repair_summary=row.get(COL_SUMMARY, "").strip(),
             notes=row.get(COL_NOTES, "").strip(),
         ))
     return records
@@ -131,6 +133,16 @@ async def get_repair_status(cdek_no: str) -> RepairRecord | None:
     cdek_no = cdek_no.strip().upper()
     for r in records:
         if r.cdek_in.upper() == cdek_no:
+            return r
+    return None
+
+
+async def get_repair_status_by_sn(sn: str) -> RepairRecord | None:
+    """根据 SN 序列号查询检修状态."""
+    records = await _fetch_all_records()
+    sn = sn.strip().upper()
+    for r in records:
+        if r.sn.upper() == sn:
             return r
     return None
 
