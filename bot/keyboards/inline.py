@@ -93,19 +93,19 @@ def main_menu_keyboard(lang: str = "zh", club_link: str = "") -> InlineKeyboardM
         "zh": {
             "inventory": "🔍 莫斯科现货查询",
             "service_center": "🛠 A-BF 俄罗斯服务中心",
-            "club": "🌙 A-BF 晨夜俱乐部",
+            "club": "🌙 A-BF 昼夜俱乐部",
             "settings": "⚙️ 设置",
         },
         "en": {
             "inventory": "🔍 Moscow Inventory",
             "service_center": "🛠 A-BF Russia Service Center",
-            "club": "🌙 A-BF Night Club",
+            "club": "🌙 A-BF Day and Night Club",
             "settings": "⚙️ Settings",
         },
         "ru": {
             "inventory": "🔍 Наличие в Москве",
             "service_center": "🛠 Сервисный центр A-BF",
-            "club": "🌙 Клуб A-BF",
+            "club": "🌙 A-BF Дневной и ночной клуб",
             "settings": "⚙️ Настройки",
         },
     }

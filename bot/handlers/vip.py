@@ -28,7 +28,7 @@ router = Router(name="vip")
 TEXTS: dict[str, dict[str, str]] = {
     "zh": {
         "welcome": (
-            "⭐ <b>Vandych 专属菜单</b>\n\n"
+            "⛺ <b>Vandych 的帐篷</b>\n\n"
             "欢迎！请选择您需要的服务："
         ),
         "discount_title": "🎁 <b>促销折扣</b>\n\n当前有效折扣：\n\n",
@@ -46,7 +46,7 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "en": {
         "welcome": (
-            "⭐ <b>Vandych Exclusive Menu</b>\n\n"
+            "⛺ <b>Vandych's tent</b>\n\n"
             "Welcome! Select a service:"
         ),
         "discount_title": "🎁 <b>Promotions</b>\n\nActive discounts:\n\n",
@@ -64,7 +64,7 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "ru": {
         "welcome": (
-            "⭐ <b>Меню Vandych (эксклюзив)</b>\n\n"
+            "⛺ <b>Палатка Вандыча</b>\n\n"
             "Добро пожаловать! Выберите услугу:"
         ),
         "discount_title": "🎁 <b>Акции</b>\n\nАктивные скидки:\n\n",
