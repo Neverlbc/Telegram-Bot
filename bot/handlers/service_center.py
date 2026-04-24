@@ -30,6 +30,7 @@ from bot.services.service_center_sheet import (
     get_repair_status,
     register_watcher,
 )
+from bot.services.sn_sheet import search_sn
 from bot.states.service_center import ServiceCenterStates
 
 logger = logging.getLogger(__name__)
@@ -344,6 +345,69 @@ async def on_sn_list(callback: CallbackQuery, lang: str = "zh") -> None:
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
     await callback.answer()
 
+
+
+# ── 管理员 SN 搜索 ───────────────────────────────────────
+
+@router.callback_query(ServiceCenterCallback.filter(F.action == "sn_search"))
+async def on_sn_search_enter(
+    callback: CallbackQuery,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message or not state:
+        return
+    prompt = {
+        "zh": "🔎 <b>查询设备序列号</b>\n\n请输入 SN 序列号（精确匹配）：",
+        "en": "🔎 <b>Device SN Search</b>\n\nEnter the serial number (exact match):",
+        "ru": "🔎 <b>Поиск серийного номера</b>\n\nВведите серийный номер (точное совпадение):",
+    }.get(lang, "")
+    await state.set_state(ServiceCenterStates.awaiting_sn_query)
+    await callback.message.edit_text(prompt)
+    await callback.answer()
+
+
+@router.message(ServiceCenterStates.awaiting_sn_query)
+async def on_sn_query_input(
+    message: Message,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not state:
+        return
+    sn = (message.text or "").strip()
+    await state.clear()
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🔎 再查一个", "en": "🔎 Search again", "ru": "🔎 Ещё поиск"}.get(lang, "🔎"),
+        callback_data=ServiceCenterCallback(action="sn_search").pack(),
+    ))
+    for row in nav_buttons("sc_admin", lang):
+        builder.row(*row)
+
+    try:
+        results = await search_sn(sn)
+    except Exception as e:
+        logger.error("search_sn failed: %s", e)
+        await message.answer(_t(lang, "loading_err"), reply_markup=builder.as_markup())
+        return
+
+    if not results:
+        not_found = {
+            "zh": f"❓ 未找到序列号 <code>{sn}</code> 的设备记录。",
+            "en": f"❓ No device found for SN <code>{sn}</code>.",
+            "ru": f"❓ Устройство с SN <code>{sn}</code> не найдено.",
+        }.get(lang, "")
+        await message.answer(not_found, reply_markup=builder.as_markup())
+        return
+
+    lines = []
+    for r in results:
+        lines.append(r.format_text())
+        lines.append("")
+    text = "\n".join(lines).strip()
+    await message.answer(text, reply_markup=builder.as_markup())
 
 
 async def show_sc_menu(callback: CallbackQuery, lang: str) -> None:

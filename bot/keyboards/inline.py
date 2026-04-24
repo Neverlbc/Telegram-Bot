@@ -220,16 +220,19 @@ def service_center_admin_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     """服务中心管理员后台键盘."""
     texts = {
         "zh": {
-            "notify": "📩 维修完成通知设置",
-            "sn": "🔍 查询 SN 表",
+            "notify": "📩 维修完成通知说明",
+            "sn_list": "📋 维修记录列表",
+            "sn_search": "🔎 查询设备序列号（SN）",
         },
         "en": {
             "notify": "📩 Repair Completion Notifications",
-            "sn": "🔍 Query SN List",
+            "sn_list": "📋 Repair Records",
+            "sn_search": "🔎 Search Device SN",
         },
         "ru": {
             "notify": "📩 Уведомления о завершении ремонта",
-            "sn": "🔍 Запрос списка SN",
+            "sn_list": "📋 Список ремонтов",
+            "sn_search": "🔎 Поиск серийного номера (SN)",
         },
     }
     t = texts.get(lang, texts["zh"])
@@ -239,8 +242,12 @@ def service_center_admin_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
         callback_data=ServiceCenterCallback(action="admin_menu").pack(),
     ))
     builder.row(InlineKeyboardButton(
-        text=t["sn"],
+        text=t["sn_list"],
         callback_data=ServiceCenterCallback(action="sn_list").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=t["sn_search"],
+        callback_data=ServiceCenterCallback(action="sn_search").pack(),
     ))
     for row in nav_buttons("sc_menu", lang):
         builder.row(*row)

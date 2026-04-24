@@ -8,3 +8,4 @@ from aiogram.fsm.state import State, StatesGroup
 class ServiceCenterStates(StatesGroup):
     awaiting_cdek_no = State()
     awaiting_admin_password = State()
+    awaiting_sn_query = State()
