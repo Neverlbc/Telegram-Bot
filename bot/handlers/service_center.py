@@ -440,9 +440,9 @@ async def on_sn_query_input(
 
     if not results:
         not_found = {
-            "zh": f"❓ 未找到序列号 <code>{sn}</code> 的设备记录。",
-            "en": f"❓ No device found for SN <code>{sn}</code>.",
-            "ru": f"❓ Устройство с SN <code>{sn}</code> не найдено.",
+            "zh": f"❌ 服务中心数据库中未找到该序列号。\n\n很遗憾，我们无法确认该设备是否购自我司。请联系销售经理进行进一步核实。",
+            "en": f"❌ The serial number was not found in the service center database.\n\nUnfortunately, we cannot confirm that this device was purchased from us. Please contact your sales manager for further verification.",
+            "ru": f"❌ Серийный номер не найден в базе сервисного центра.\n\nК сожалению, мы не можем подтвердить, что этот прибор был приобретён у нас. Пожалуйста, свяжитесь с вашим менеджером по продажам для дальнейшей проверки.",
         }.get(lang, "")
         await message.answer(not_found, reply_markup=builder.as_markup())
         return

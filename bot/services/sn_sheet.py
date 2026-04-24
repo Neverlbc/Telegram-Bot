@@ -42,10 +42,10 @@ class SNRecord:
 
     def format_text(self, lang: str = "zh") -> str:
         labels = {
-            "zh": ("品牌", "型号", "序列号", "✅ 该设备记录存在"),
-            "en": ("Brand", "Model", "Serial No.", "✅ Device record found"),
-            "ru": ("Бренд", "Модель", "Серийный номер", "✅ Устройство найдено"),
-        }.get(lang, ("品牌", "型号", "序列号", "✅ 该设备记录存在"))
+            "zh": ("品牌", "型号", "序列号", "✅ 我们已在数据库中找到该序列号。该设备由我公司提供。"),
+            "en": ("Brand", "Model", "Serial No.", "✅ The serial number was found in our database. This device was provided by our company."),
+            "ru": ("Бренд", "Модель", "Серийный номер", "✅ Серийный номер найден в нашей базе данных. Это устройство предоставлено нашей компанией."),
+        }.get(lang, ("品牌", "型号", "序列号", "✅ 我们已在数据库中找到该序列号。该设备由我公司提供。"))
 
         lines = [
             labels[3],
