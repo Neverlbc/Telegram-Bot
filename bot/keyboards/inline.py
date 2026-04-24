@@ -56,32 +56,20 @@ def language_keyboard() -> InlineKeyboardMarkup:
 
 # ── 设置与个人中心 ────────────────────────────────────
 
-def settings_menu_keyboard(lang: str = "zh", show_profile: bool = True) -> InlineKeyboardMarkup:
+def settings_menu_keyboard(lang: str = "zh", show_profile: bool = False) -> InlineKeyboardMarkup:
     """设置面板键盘."""
     texts = {
-        "zh": {"profile": "👤 个人中心", "lang": "🌐 切换语言"},
-        "en": {"profile": "👤 Profile", "lang": "🌐 Language"},
-        "ru": {"profile": "👤 Профиль", "lang": "🌐 Язык"},
+        "zh": {"lang": "🌐 切换语言"},
+        "en": {"lang": "🌐 Language"},
+        "ru": {"lang": "🌐 Язык"},
     }
     t = texts.get(lang, texts["zh"])
     builder = InlineKeyboardBuilder()
-
-    if show_profile:
-        builder.row(
-            InlineKeyboardButton(text=t["profile"], callback_data=MenuCallback(action="profile").pack()),
-        )
-        builder.row(
-            InlineKeyboardButton(text=t["lang"], callback_data=MenuCallback(action="setting_lang").pack()),
-        )
-        for row in nav_buttons("menu", lang):
-            builder.row(*row)
-    else:
-        builder.row(
-            InlineKeyboardButton(text=t["lang"], callback_data=MenuCallback(action="setting_lang").pack()),
-        )
-        for row in nav_buttons("settings", lang):
-            builder.row(*row)
-
+    builder.row(
+        InlineKeyboardButton(text=t["lang"], callback_data=MenuCallback(action="setting_lang").pack()),
+    )
+    for row in nav_buttons("menu", lang):
+        builder.row(*row)
     return builder.as_markup()
 
 

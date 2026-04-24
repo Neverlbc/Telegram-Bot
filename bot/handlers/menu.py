@@ -83,19 +83,6 @@ async def on_menu_action(
             "🌐 " + SETTINGS_TITLES.get(lang, SETTINGS_TITLES["zh"]),
             reply_markup=language_keyboard(),
         )
-    elif action == "profile":
-        from bot.keyboards.inline import settings_menu_keyboard as smk
-        user = callback.from_user
-        if user:
-            profile_text = {
-                "zh": f"👤 <b>个人中心</b>\n\n用户名：@{user.username or '-'}\nID：<code>{user.id}</code>\n语言：{lang}",
-                "en": f"👤 <b>Profile</b>\n\nUsername: @{user.username or '-'}\nID: <code>{user.id}</code>\nLanguage: {lang}",
-                "ru": f"👤 <b>Профиль</b>\n\nПользователь: @{user.username or '-'}\nID: <code>{user.id}</code>\nЯзык: {lang}",
-            }.get(lang, "")
-        else:
-            profile_text = "👤 Profile"
-        await callback.message.edit_text(profile_text, reply_markup=smk(lang, show_profile=False))
-
     await callback.answer()
 
 
