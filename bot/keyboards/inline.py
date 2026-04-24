@@ -137,30 +137,17 @@ def main_menu_keyboard(lang: str = "zh", club_link: str = "") -> InlineKeyboardM
 # ── 莫斯科现货查询 ────────────────────────────────────
 
 def inventory_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
-    """莫斯科现货查询 — 普通查询 / VIP查询."""
+    """莫斯科现货查询 — 普通查询（VIP 查询由文本密码触发）."""
     texts = {
-        "zh": {
-            "public": "📋 普通查询",
-            "vip": "⭐ VIP 查询（输入密码）",
-        },
-        "en": {
-            "public": "📋 Public Query",
-            "vip": "⭐ VIP Query (enter password)",
-        },
-        "ru": {
-            "public": "📋 Обычный запрос",
-            "vip": "⭐ VIP-запрос (ввести пароль)",
-        },
+        "zh": {"public": "📋 普通查询"},
+        "en": {"public": "📋 Public Query"},
+        "ru": {"public": "📋 Обычный запрос"},
     }
     t = texts.get(lang, texts["zh"])
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text=t["public"],
         callback_data=InventoryCallback(action="public_query").pack(),
-    ))
-    builder.row(InlineKeyboardButton(
-        text=t["vip"],
-        callback_data=InventoryCallback(action="vip_enter_password").pack(),
     ))
     for row in nav_buttons("menu", lang):
         builder.row(*row)

@@ -12,7 +12,9 @@ from html import escape
 from unicodedata import east_asian_width
 
 from aiogram import F, Router
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -20,7 +22,6 @@ from bot.config import settings
 from bot.keyboards.callbacks import InventoryCallback, NavCallback
 from bot.keyboards.inline import inventory_category_keyboard, inventory_menu_keyboard
 from bot.services.outdoor_sheets import OutdoorItem, get_outdoor_inventory
-from bot.states.inventory import InventoryStates
 
 logger = logging.getLogger(__name__)
 router = Router(name="inventory")
@@ -216,36 +217,13 @@ async def on_public_query(callback: CallbackQuery, lang: str = "zh") -> None:
     await callback.answer()
 
 
-@router.callback_query(InventoryCallback.filter(F.action == "vip_enter_password"))
-async def on_vip_enter_password(
-    callback: CallbackQuery,
-    lang: str = "zh",
-    state: FSMContext | None = None,
-) -> None:
-    if not callback.message or not state:
-        return
-    await state.set_state(InventoryStates.awaiting_vip_password)
-    await callback.message.edit_text(_t(lang, "enter_password"))
-    await callback.answer()
-
-
-@router.message(InventoryStates.awaiting_vip_password)
-async def on_vip_password_input(
-    message: Message,
-    lang: str = "zh",
-    state: FSMContext | None = None,
-) -> None:
-    if not state:
-        return
-    entered = (message.text or "").strip()
-    if entered == settings.vip_inventory_password:
-        await state.clear()
-        await message.answer(
-            _t(lang, "category_title"),
-            reply_markup=inventory_category_keyboard(lang, vip=True),
-        )
-    else:
-        await message.answer(_t(lang, "wrong_password"))
+@router.message(StateFilter(default_state), F.text == settings.vip_inventory_password)
+async def on_vip_password_text(message: Message, lang: str = "zh") -> None:
+    """VIP 密码文本触发（无按钮，直接发密码即可进入 VIP 查询）."""
+    await message.answer(
+        _t(lang, "category_title"),
+        reply_markup=inventory_category_keyboard(lang, vip=True),
+    )
 
 
 @router.callback_query(InventoryCallback.filter(F.action == "category"))
