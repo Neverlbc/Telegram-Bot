@@ -10,8 +10,6 @@ services:
     volumes:
       - ./google_credentials.json:/app/google_credentials.json:ro
     depends_on:
-      mysql:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -19,32 +17,6 @@ services:
     # 生产环境 Webhook 模式启用端口映射
     # ports:
     #   - "${WEBHOOK_PORT:-8443}:${WEBHOOK_PORT:-8443}"
-
-  # ── MySQL 数据库 ────────────────────────────────────
-  mysql:
-    image: mysql:8.0
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-telegram_bot}
-      MYSQL_USER: ${MYSQL_USER:-bot_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-bot_password}
-    ports:
-      - "3307:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-      - --default-authentication-plugin=mysql_native_password
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - bot-network
 
   # ── Redis 缓存 ──────────────────────────────────────
   redis:
@@ -101,7 +73,6 @@ services:
       - bot-network
 
 volumes:
-  mysql_data:
   redis_data:
 
 networks:
