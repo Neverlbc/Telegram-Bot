@@ -70,6 +70,11 @@ TEXTS: dict[str, dict[str, str]] = {
         "cdek_out_line": "回寄单号：<code>{cdek_out}</code>\n",
         "repair_summary_line": "维修报告：{summary}\n",
         "notify_done": "📦 您的设备已从服务中心寄回，请及时关注 CDEK 状态。",
+        "notify_in_progress": (
+            "您的设备正在处理中。由于服务中心工作量较大，可能会有所延迟。"
+            "我们的工程师正在尽全力处理大量工单，努力尽快将设备归还给您。\n\n"
+            "请耐心等待状态更新。如有紧急情况，请直接通过服务中心频道联系客服获取更多信息。"
+        ),
         "notify_watch": "✅ 已订阅状态更新，有变更时将自动通知您。",
         "enter_admin_pw": "🔐 请输入管理员密码：",
         "wrong_admin_pw": "❌ 密码错误。",
@@ -114,6 +119,11 @@ TEXTS: dict[str, dict[str, str]] = {
         "cdek_out_line": "Return CDEK No.: <code>{cdek_out}</code>\n",
         "repair_summary_line": "Repair Report: {summary}\n",
         "notify_done": "📦 Your device has been shipped back from the service center. Please track your CDEK status.",
+        "notify_in_progress": (
+            "Your device is currently being processed. Due to the high workload of our service center, there may be delays. "
+            "Our engineers are doing their utmost to handle the large volume of requests, making every effort to return your device as quickly as possible.\n\n"
+            "Please wait patiently for a status update. If your request is urgent, please contact customer support directly through the service center channel for more information."
+        ),
         "notify_watch": "✅ Subscribed to updates — you'll be notified on any change.",
         "enter_admin_pw": "🔐 Enter admin password:",
         "wrong_admin_pw": "❌ Incorrect password.",
@@ -158,6 +168,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "cdek_out_line": "Номер CDEK для возврата: <code>{cdek_out}</code>\n",
         "repair_summary_line": "Отчёт о ремонте: {summary}\n",
         "notify_done": "📦 Ваше устройство отправлено из сервисного центра. Следите за статусом CDEK.",
+        "notify_in_progress": (
+            "Ваше устройство находится в обработке. В связи с высокой загрузкой нашего сервисного центра возможны задержки. "
+            "Наши инженеры прилагают все усилия для обработки большого количества заявок и ремонта большого количества устройств, "
+            "делая все возможное, чтобы как можно быстрее вернуть вам ваше устройство.\n\n"
+            "Пожалуйста, терпеливо ждите обновления статуса. Если ваша заявка срочная, пожалуйста, свяжитесь со службой поддержки "
+            "клиентов напрямую через канал сервисного центра для получения дополнительной информации."
+        ),
         "notify_watch": "✅ Вы подписаны на обновления — уведомим при изменении.",
         "enter_admin_pw": "🔐 Введите пароль администратора:",
         "wrong_admin_pw": "❌ Неверный пароль.",
@@ -288,7 +305,13 @@ async def on_cdek_no_input(
         if record.repair_summary:
             repair_summary_line = _t(lang, "repair_summary_line").format(summary=record.repair_summary)
 
-    notify_line = _t(lang, "notify_done") if is_done else _t(lang, "notify_watch")
+    status_lower = record.status.strip().lower()
+    if is_done:
+        notify_line = _t(lang, "notify_done")
+    elif status_lower == "in progress":
+        notify_line = _t(lang, "notify_in_progress")
+    else:
+        notify_line = _t(lang, "notify_watch")
 
     text = _t(lang, "cdek_result").format(
         cdek_in=record.cdek_in,
