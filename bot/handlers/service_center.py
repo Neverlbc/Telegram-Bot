@@ -41,14 +41,18 @@ TEXTS: dict[str, dict[str, str]] = {
     "zh": {
         "menu_title": "🛠 <b>A-BF 俄罗斯服务中心</b>\n\n请选择服务：",
         "info_text": (
-            "📄 <b>服务中心说明</b>\n\n"
-            "A-BF 俄罗斯服务中心提供设备检修、序列号查询等售后服务。\n\n"
-            "• 设备故障请先拍照记录\n"
-            "• 将设备通过 CDEK 寄送至服务中心\n"
-            "• 寄出后在此输入 CDEK 单号查询检修进度\n"
-            "• 维修完成后将自动通知您并提供回寄单号"
+            "👋您好，这里是俄罗斯A-BF服务中心！\n\n"
+            "我们接受从本公司购买的产品进行维修和检测。\n\n"
+            "如需更多信息，请私信联系我们。\n\n"
+            "🕒 服务时间：周一至周五，上午9:30至下午6:00（莫斯科时间）。\n\n"
+            "❗️请注意：我们的服务中心仅提供技术支持和设备维修服务。我们不提供关于卖家查询、订单状态或发货信息的咨询。联系我们时，请勿提供卖家信息或订单号。\n\n"
+            "📩 为确保快速解决问题，请提供以下信息：\n\n"
+            "1. 设备型号\n"
+            "2. 设备序列号 (S/N)\n"
+            "3. 故障或问题的描述\n\n"
+            "💬 由于服务中心工作量较大，回复可能会有所延迟。我们所有员工均为来自俄罗斯的俄语专家。我们会在工作时间内按先到先得的原则回复您。\n\n"
+            "感谢您的理解和耐心！"
         ),
-        "info_en": "",  # 由 info_text_* 分 key 处理
         "enter_cdek": "🔧 <b>设备检修查询</b>\n\n请输入您寄件的 CDEK 单号：",
         "cdek_not_found": "❓ 未找到单号 <code>{cdek_no}</code> 的记录。\n\n请确认单号是否正确，或联系客服：",
         "cdek_result": (
@@ -73,12 +77,21 @@ TEXTS: dict[str, dict[str, str]] = {
     "en": {
         "menu_title": "🛠 <b>A-BF Russia Service Center</b>\n\nSelect a service:",
         "info_text": (
-            "📄 <b>Service Center Info</b>\n\n"
-            "A-BF Russia Service Center provides device repair and serial number query services.\n\n"
-            "• Photograph any damage before sending\n"
-            "• Ship the device via CDEK to the service center\n"
-            "• Enter your CDEK tracking number here to check repair status\n"
-            "• You will be notified automatically when repair is complete"
+            "👋Hello, this is the Russian A-BF Service Center!\n\n"
+            "We accept products purchased from our company for repair and inspection.\n\n"
+            "For more information, please send a private message to the community.\n\n"
+            "🕒 Hours: Mon–Fri, 9:30 AM to 6:00 PM (Moscow time).\n\n"
+            "❗️ Please note: Our service center provides technical support and equipment repairs only. "
+            "We do not provide advice on seller inquiries, order status, or delivery information. "
+            "When contacting us, please do not provide seller information or the order number.\n\n"
+            "📩 To ensure a prompt resolution, please provide the following:\n\n"
+            "1. Equipment model\n"
+            "2. Device serial number (S/N)\n"
+            "3. Description of the malfunction or problem encountered\n\n"
+            "💬 Due to the high workload of our service center, there may be a delay in response. "
+            "All our employees are Russian-speaking specialists from Russia. "
+            "We will respond to you during business hours on a first-come, first-served basis.\n\n"
+            "Thank you for your understanding and patience!"
         ),
         "enter_cdek": "🔧 <b>Device Repair Query</b>\n\nPlease enter your outgoing CDEK tracking number:",
         "cdek_not_found": "❓ No record found for <code>{cdek_no}</code>.\n\nPlease verify the number or contact support:",
@@ -104,12 +117,21 @@ TEXTS: dict[str, dict[str, str]] = {
     "ru": {
         "menu_title": "🛠 <b>Сервисный центр A-BF</b>\n\nВыберите услугу:",
         "info_text": (
-            "📄 <b>О сервисном центре</b>\n\n"
-            "Сервисный центр A-BF предоставляет ремонт устройств и запросы по серийному номеру.\n\n"
-            "• Сфотографируйте повреждения перед отправкой\n"
-            "• Отправьте устройство через CDEK в сервисный центр\n"
-            "• Введите номер CDEK здесь для проверки статуса ремонта\n"
-            "• Вы получите уведомление по завершении ремонта"
+            "👋Здравствуйте, это Российский сервисный центр А-BF！\n\n"
+            "Мы принимаем к ремонту и осмотру продукцию, приобретенную у нашей компании.\n\n"
+            "Для уточнения вы можете написать в личные сообщения сообществу.\n\n"
+            "🕒 Режим работы: Пн–Пт, с 09:30 до 18:00 (по московскому времени).\n\n"
+            "❗️ Обратите внимание: наш сервисный центр занимается исключительно технической поддержкой и ремонтом оборудования. "
+            "Мы не консультируем по вопросам продавца, статусу заказа или доставки. "
+            "При обращении не нужно указывать данные продавца или номер заказа.\n\n"
+            "📩 Для оперативного решения вопроса, пожалуйста, сразу укажите:\n\n"
+            "1. Модель оборудования\n"
+            "2. Серийный номер прибора (S/N)\n"
+            "3. Описание неисправности или возникшей проблемы\n\n"
+            "💬 В связи с высокой загрузкой сервисного центра возможны задержки в ответе. "
+            "Все наши сотрудники — русскоязычные специалисты из России. "
+            "Мы ответим вам в рабочее время в порядке очереди.\n\n"
+            "Спасибо за понимание и терпение！"
         ),
         "enter_cdek": "🔧 <b>Запрос ремонта</b>\n\nВведите номер CDEK вашего отправления:",
         "cdek_not_found": "❓ Запись для <code>{cdek_no}</code> не найдена.\n\nПроверьте номер или обратитесь в поддержку:",
