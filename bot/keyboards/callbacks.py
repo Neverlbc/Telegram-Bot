@@ -91,4 +91,5 @@ class ServiceCenterCallback(CallbackData, prefix="sc"):
 class VipCallback(CallbackData, prefix="vip"):
     """Vandych VIP 隐藏菜单."""
 
-    action: str  # menu / discount / shipping / wholesale
+    action: str  # menu / discount / sku_select / shipping / wholesale
+    sku_idx: int = -1  # 折扣 SKU 列表索引（-1 表示未选择）

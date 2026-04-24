@@ -52,21 +52,27 @@ class DiscountItem:
     active: bool = True
     notes: str = ""
 
-    def format_text(self, lang: str = "zh") -> str:
-        parts = []
-        if lang == "zh":
-            parts.append(f"🏷 <b>{self.model}</b>  折扣：{self.discount}")
-        elif lang == "en":
-            parts.append(f"🏷 <b>{self.model}</b>  Discount: {self.discount}")
-        else:
-            parts.append(f"🏷 <b>{self.model}</b>  Скидка: {self.discount}")
-        if self.code:
-            parts.append(f"🔑 {self.code}")
+    def format_copyable(self, lang: str = "zh") -> str:
+        """生成用户可复制的折扣信息块."""
+        labels = {
+            "zh": ("SKU", "链接", "折扣码", "说明"),
+            "en": ("SKU", "Links", "Code", "Notes"),
+            "ru": ("SKU", "Ссылки", "Код", "Примечания"),
+        }.get(lang, ("SKU", "Links", "Code", "Notes"))
+
+        lines = [f"<b>{labels[0]}：</b><code>{self.model}</code>"]
         if self.link:
-            parts.append(f"🛒 {self.link}")
+            lines.append(f"\n<b>{labels[1]}：</b>{self.link}")
+        if self.code:
+            lines.append(f"\n<b>{labels[2]}：</b><code>{self.code}</code>")
         if self.notes:
-            parts.append(f"📝 {self.notes}")
-        return "\n".join(parts)
+            lines.append(f"\n<b>{labels[3]}：</b>{self.notes}")
+        elif self.discount:
+            lines.append(f"\n<b>{labels[3]}：</b>{self.discount}")
+        return "\n".join(lines)
+
+    def format_text(self, lang: str = "zh") -> str:
+        return self.format_copyable(lang)
 
 
 def _parse_csv(csv_text: str) -> list[DiscountItem]:
@@ -126,3 +132,26 @@ async def get_discounts() -> list[DiscountItem]:
             logger.warning("Redis write failed: %s", e)
 
     return _parse_csv(csv_text)
+
+
+def _normalize(text: str) -> str:
+    """标准化字符串用于模糊匹配：小写 + 去除空格/连字符/下划线."""
+    import re
+    return re.sub(r"[\s\-_]", "", text.lower())
+
+
+def fuzzy_find(items: list[DiscountItem], query: str) -> list[tuple[int, DiscountItem]]:
+    """模糊搜索 SKU，返回 (原始索引, item) 列表.
+
+    匹配规则：标准化后的查询词是标准化 model 的子串，或反之。
+    例如: "cpro"/"CPRO"/"jerry cpro" 都能命中 "Jerry-CPRO"
+    """
+    q = _normalize(query)
+    if not q:
+        return []
+    results = []
+    for idx, item in enumerate(items):
+        m = _normalize(item.model)
+        if q in m or m in q:
+            results.append((idx, item))
+    return results

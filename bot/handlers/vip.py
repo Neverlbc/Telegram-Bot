@@ -19,7 +19,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.config import settings
 from bot.keyboards.callbacks import NavCallback, VipCallback
 from bot.keyboards.inline import vip_menu_keyboard
-from bot.services.discount_sheet import get_discounts
+from bot.services.discount_sheet import fuzzy_find, get_discounts
 from bot.states.vip import VipStates
 
 logger = logging.getLogger(__name__)
@@ -121,6 +121,7 @@ async def on_vip_menu(callback: CallbackQuery, lang: str = "zh") -> None:
 
 @router.callback_query(VipCallback.filter(F.action == "discount"))
 async def on_vip_discount(callback: CallbackQuery, lang: str = "zh") -> None:
+    """展示 SKU 列表按钮，供用户选择."""
     if not callback.message:
         return
     try:
@@ -130,33 +131,75 @@ async def on_vip_discount(callback: CallbackQuery, lang: str = "zh") -> None:
         await callback.answer(_t(lang, "loading_err"), show_alert=True)
         return
 
-    builder = InlineKeyboardBuilder()
-    for row in [
-        [InlineKeyboardButton(
-            text={"zh": "◀️ 返回", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️"),
-            callback_data=VipCallback(action="menu").pack(),
-        )],
-        [InlineKeyboardButton(
-            text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠"),
-            callback_data=NavCallback(action="home").pack(),
-        )],
-    ]:
-        builder.row(*row)
+    nav = InlineKeyboardBuilder()
+    nav.row(InlineKeyboardButton(
+        text={"zh": "◀️ 返回", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️"),
+        callback_data=VipCallback(action="menu").pack(),
+    ))
+    nav.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
 
     if not items:
-        await callback.message.edit_text(_t(lang, "discount_empty"), reply_markup=builder.as_markup())
+        await callback.message.edit_text(_t(lang, "discount_empty"), reply_markup=nav.as_markup())
         await callback.answer()
         return
 
-    lines = [_t(lang, "discount_title")]
-    for item in items:
-        lines.append(item.format_text(lang))
-        lines.append("")
-    text = "\n".join(lines) + _t(lang, "discount_note")
-    if len(text) > 4000:
-        text = text[:3900] + "\n…"
+    title = {
+        "zh": "🎁 <b>请选择产品</b>\n\n点击下方 SKU 获取专属折扣信息：",
+        "en": "🎁 <b>Select a product</b>\n\nTap an SKU below to get your exclusive discount:",
+        "ru": "🎁 <b>Выберите товар</b>\n\nНажмите на SKU ниже, чтобы получить скидку:",
+    }.get(lang, "")
 
-    await callback.message.edit_text(text, reply_markup=builder.as_markup())
+    builder = InlineKeyboardBuilder()
+    for idx, item in enumerate(items):
+        builder.row(InlineKeyboardButton(
+            text=f"🏷 {item.model}",
+            callback_data=VipCallback(action="sku_select", sku_idx=idx).pack(),
+        ))
+    for btn_row in nav.buttons:
+        builder.row(*btn_row)
+
+    await callback.message.edit_text(title, reply_markup=builder.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(VipCallback.filter(F.action == "sku_select"))
+async def on_sku_select(
+    callback: CallbackQuery,
+    callback_data: VipCallback,
+    lang: str = "zh",
+) -> None:
+    """用户点击 SKU 按钮后，发送可复制的折扣信息."""
+    if not callback.message:
+        return
+    try:
+        items = await get_discounts()
+    except Exception as e:
+        logger.error("get_discounts failed: %s", e)
+        await callback.answer(_t(lang, "loading_err"), show_alert=True)
+        return
+
+    idx = callback_data.sku_idx
+    if idx < 0 or idx >= len(items):
+        await callback.answer("❌ 数据已更新，请重新选择", show_alert=True)
+        return
+
+    item = items[idx]
+    text = item.format_copyable(lang) + _t(lang, "discount_note")
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text={"zh": "◀️ 返回列表", "en": "◀️ Back to list", "ru": "◀️ К списку"}.get(lang, "◀️"),
+        callback_data=VipCallback(action="discount").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), disable_web_page_preview=True)
     await callback.answer()
 
 
