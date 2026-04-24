@@ -24,4 +24,4 @@ asyncio.run(main())
 " && echo "Database ready." || echo "WARNING: Database setup failed (may need manual intervention)"
 
 echo "Starting bot..."
-exec python -m bot "\$@"
+exec python -m bot "$@"
