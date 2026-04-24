@@ -36,10 +36,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "stock_title_vip": "⭐ <b>莫斯科 · 户外类现货</b>（VIP 完整库存）\n\n",
         "no_stock_public": "❌ 当前暂无公开库存。\n\n如需进一步了解，请联系客服：",
         "no_stock_vip": "❌ 当前暂无库存（含空运预约）。\n\n如需预约空运，请联系：",
-        "available": "✅ 有货",
-        "out_of_stock": "❌ 无货",
-        "contact_cs": "💬 联系客服",
-        "contact_air": "✈️ 预约空运",
+        "contact_tg": "💬 TG 联系客服",
+        "contact_wa": "💬 WhatsApp 联系",
         "data_delay": "\n\n<i>数据可能有 5 分钟缓存延迟</i>",
         "loading_err": "❌ 读取库存失败，请稍后重试。",
         "not_configured": "⚠️ 库存服务暂未配置，请稍后再试。",
@@ -51,10 +49,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "stock_title_vip": "⭐ <b>Moscow · Outdoor Stock</b> (VIP Full View)\n\n",
         "no_stock_public": "❌ No public inventory available.\n\nContact support:",
         "no_stock_vip": "❌ No inventory available (incl. air freight).\n\nTo book air freight:",
-        "available": "✅ In stock",
-        "out_of_stock": "❌ Out of stock",
-        "contact_cs": "💬 Contact Support",
-        "contact_air": "✈️ Book Air Freight",
+        "contact_tg": "💬 TG Contact",
+        "contact_wa": "💬 WhatsApp",
         "data_delay": "\n\n<i>Data may be up to 5 minutes delayed</i>",
         "loading_err": "❌ Failed to load inventory. Please try again.",
         "not_configured": "⚠️ Inventory service not configured yet.",
@@ -66,10 +62,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "stock_title_vip": "⭐ <b>Москва · Аутдор — наличие</b> (VIP полный список)\n\n",
         "no_stock_public": "❌ Публичный список пуст.\n\nСвяжитесь с поддержкой:",
         "no_stock_vip": "❌ Нет в наличии (включая авиа).\n\nДля заказа авиадоставки:",
-        "available": "✅ В наличии",
-        "out_of_stock": "❌ Нет в наличии",
-        "contact_cs": "💬 Поддержка",
-        "contact_air": "✈️ Заказать авиа",
+        "contact_tg": "💬 TG Связаться",
+        "contact_wa": "💬 WhatsApp",
         "data_delay": "\n\n<i>Данные обновляются раз в 5 минут</i>",
         "loading_err": "❌ Ошибка загрузки. Попробуйте позже.",
         "not_configured": "⚠️ Сервис наличия ещё не настроен.",
@@ -124,7 +118,7 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
         "ru": ("Модель", "Кол-во", "Статус"),
     }.get(lang, ("型号", "数量", "状态"))
 
-    names = [i.name or i.sku for i in items]
+    names = [i.sku for i in items]
     qtys = [str(i.qty) for i in items]
     statuses = [i.status_text(lang) for i in items]
 
@@ -137,7 +131,7 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
 
     rows = [header]
     for idx, item in enumerate(items):
-        name_lines = _wrap_cell(item.name or item.sku, name_w)
+        name_lines = _wrap_cell(item.sku, name_w)
         qty_lines = _wrap_cell(str(item.qty), qty_w)
         status_lines = _wrap_cell(item.status_text(lang), status_w)
         h = max(len(name_lines), len(qty_lines), len(status_lines))
@@ -154,31 +148,28 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
     return f"<pre>{escape(chr(10).join(rows))}</pre>"
 
 
-# ── 联系客服 URL 构建 ────────────────────────────────────
+# ── 联系按钮构建（TG + WhatsApp 两个按钮）────────────────
 
-def _agent_url(prefill: str) -> str:
+def _contact_buttons(lang: str, vip: bool, user_id: int | None = None) -> list[InlineKeyboardButton]:
     import urllib.parse
-    username = settings.human_agent_username
-    return f"https://t.me/{username}?text={urllib.parse.quote(prefill)}"
-
-
-def _contact_button(lang: str, vip: bool, user_id: int | None = None) -> InlineKeyboardButton:
     tag = f" (TGID:{user_id})" if user_id else ""
     if vip:
-        key = "contact_air"
         prefill = {
             "zh": f"你好，我需要预约空运{tag}",
             "en": f"Hi, I'd like to book air freight{tag}",
             "ru": f"Привет, хочу заказать авиадоставку{tag}",
-        }.get(lang, "Hi, air freight inquiry")
+        }.get(lang, f"Hi, air freight inquiry{tag}")
     else:
-        key = "contact_cs"
         prefill = {
             "zh": f"你好，我想查询库存{tag}",
             "en": f"Hi, I'd like to check stock{tag}",
             "ru": f"Привет, хочу узнать наличие{tag}",
-        }.get(lang, "Hi, stock inquiry")
-    return InlineKeyboardButton(text=_t(lang, key), url=_agent_url(prefill))
+        }.get(lang, f"Hi, stock inquiry{tag}")
+    tg_url = f"https://t.me/{settings.inventory_agent_username}?text={urllib.parse.quote(prefill)}"
+    return [
+        InlineKeyboardButton(text=_t(lang, "contact_tg"), url=tg_url),
+        InlineKeyboardButton(text=_t(lang, "contact_wa"), url=settings.inventory_whatsapp_url),
+    ]
 
 
 # ── Handlers ────────────────────────────────────────────
@@ -255,7 +246,7 @@ async def on_inventory_category(
 
     if not items:
         user_id = callback.from_user.id if callback.from_user else None
-        builder.row(_contact_button(lang, vip, user_id))
+        builder.row(*_contact_buttons(lang, vip, user_id))
         builder.row(InlineKeyboardButton(
             text={"zh": "◀️ 返回", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️ Back"),
             callback_data=InventoryCallback(action="menu").pack(),
@@ -278,7 +269,7 @@ async def on_inventory_category(
         text = text[:3900] + "\n…"
 
     user_id = callback.from_user.id if callback.from_user else None
-    builder.row(_contact_button(lang, vip, user_id))
+    builder.row(*_contact_buttons(lang, vip, user_id))
     builder.row(InlineKeyboardButton(
         text={"zh": "◀️ 返回查询方式", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️ Back"),
         callback_data=InventoryCallback(action="menu").pack(),

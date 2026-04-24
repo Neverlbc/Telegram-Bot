@@ -1,10 +1,11 @@
 """莫斯科户外现货 Google Sheets 服务.
 
-从用户提供的 Google Sheet 读取户外类库存。
-表格结构（列名由配置决定）：
-  SKU | 型号/名称 | 数量 | 是否展示(1=公开, 0=VIP专属) | 备注
+两个 tab：
+  完整版 (GID=0)          — VIP 视图，所有品牌
+  阈割版 (GID=644083927)  — 公开视图，部分品牌
 
-VIP 用户可见全部行，普通用户只见 is_public == True 的行。
+表格列：SKU | QTYS | State | Notes
+品牌标题行（QTYS 为空）自动跳过。
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import aiohttp
 from redis.asyncio import Redis
@@ -27,15 +28,15 @@ SHEETS_CSV_URL = (
 )
 CACHE_TTL = 300  # 5 分钟
 
-# 表头列名配置 — 与实际 Google Sheet 列名对应，如需调整在此处修改
-COL_SKU = "SKU"
-COL_NAME = "名称"        # 中文商品名
-COL_QTY = "数量"         # 库存数量
-COL_PUBLIC = "是否展示"  # 1 或 yes → 公开可见；0 或 no → VIP专属
-COL_NOTES = "备注"
+# 列名常量 — 与 Google Sheet 实际表头对应
+COL_SKU   = "SKU"
+COL_QTY   = "QTYS"
+COL_STATE = "State"
+COL_NOTES = "Notes"
 
-# Outdoor sheet 默认使用第一个 tab（gid=0），可扩展为多 tab
-OUTDOOR_GID = 0
+# Tab GID 配置
+OUTDOOR_GID_FULL     = 0          # Stock_Outdoor【完整版】VIP 视图
+OUTDOOR_GID_FILTERED = 644083927  # Stock_Outdoor【阈割版】公开视图
 
 _redis_client: Redis | None = None
 
@@ -50,9 +51,8 @@ def _get_redis() -> Redis | None:
 @dataclass
 class OutdoorItem:
     sku: str
-    name: str
     qty: int
-    is_public: bool = True  # True = 公开可见, False = 仅 VIP 可见
+    state: str = ""   # Sheet 中 State 列原始值
     notes: str = ""
 
     @property
@@ -60,6 +60,8 @@ class OutdoorItem:
         return self.qty > 0
 
     def status_text(self, lang: str = "zh") -> str:
+        if self.state:
+            return self.state
         if self.is_available:
             return {"zh": "✅ 有货", "en": "✅ In stock", "ru": "✅ В наличии"}.get(lang, "✅ 有货")
         return {"zh": "❌ 无货", "en": "❌ Out of stock", "ru": "❌ Нет в наличии"}.get(lang, "❌ 无货")
@@ -72,32 +74,32 @@ def _parse_csv(csv_text: str) -> list[OutdoorItem]:
         sku = row.get(COL_SKU, "").strip()
         if not sku:
             continue
+        qty_str = row.get(COL_QTY, "").strip()
+        if not qty_str:
+            # QTYS 为空 → 品牌标题行，跳过
+            continue
         try:
-            qty = int(row.get(COL_QTY, "0").strip() or "0")
+            qty = int(qty_str)
         except ValueError:
             qty = 0
-        name = row.get(COL_NAME, sku).strip()
+        state = row.get(COL_STATE, "").strip()
         notes = row.get(COL_NOTES, "").strip()
-        raw_public = str(row.get(COL_PUBLIC, "1")).strip().lower()
-        is_public = raw_public in ("1", "yes", "true", "是", "公开", "y")
-        items.append(OutdoorItem(sku=sku, name=name, qty=qty, is_public=is_public, notes=notes))
+        items.append(OutdoorItem(sku=sku, qty=qty, state=state, notes=notes))
     return items
 
 
 async def get_outdoor_inventory(vip: bool = False) -> list[OutdoorItem]:
     """获取户外类库存列表.
 
-    Args:
-        vip: True 返回全部行（VIP 视图），False 只返回公开展示行。
-
-    Returns:
-        OutdoorItem 列表。Sheet ID 未配置时返回空列表。
+    vip=True  → 读完整版 tab（全品牌）
+    vip=False → 读阈割版 tab（公开品牌）
     """
     sheet_id = settings.outdoor_sheet_id
     if not sheet_id:
         logger.warning("outdoor_sheet_id not configured")
         return []
 
+    gid = OUTDOOR_GID_FULL if vip else OUTDOOR_GID_FILTERED
     cache_key = f"outdoor_inv:{'vip' if vip else 'pub'}"
     redis = _get_redis()
 
@@ -105,12 +107,11 @@ async def get_outdoor_inventory(vip: bool = False) -> list[OutdoorItem]:
         try:
             cached = await redis.get(cache_key)
             if cached:
-                items = _parse_csv(cached)
-                return items if vip else [i for i in items if i.is_public]
+                return _parse_csv(cached)
         except Exception as e:
             logger.warning("Redis read failed: %s", e)
 
-    url = SHEETS_CSV_URL.format(sheet_id=sheet_id, gid=OUTDOOR_GID)
+    url = SHEETS_CSV_URL.format(sheet_id=sheet_id, gid=gid)
     try:
         async with aiohttp.ClientSession() as http:
             async with http.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
@@ -122,13 +123,11 @@ async def get_outdoor_inventory(vip: bool = False) -> list[OutdoorItem]:
 
     if redis is not None:
         try:
-            # 全量缓存原始 CSV，两种视图共享同一缓存源
             await redis.set(cache_key, csv_text, ex=CACHE_TTL)
         except Exception as e:
             logger.warning("Redis write failed: %s", e)
 
-    items = _parse_csv(csv_text)
-    return items if vip else [i for i in items if i.is_public]
+    return _parse_csv(csv_text)
 
 
 async def clear_outdoor_cache() -> None:

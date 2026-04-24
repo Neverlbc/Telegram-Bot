@@ -80,6 +80,11 @@ class Settings(BaseSettings):
 
     # ── 人工客服 ───────────────────────────────────────
     human_agent_username: str = Field("ABFOfficialGroup", description="统一人工客服 Telegram 用户名 (不带@)")
+    inventory_agent_username: str = Field("Sarahhappyeveryday", description="现货查询专属客服 TG 用户名 (不带@)")
+    inventory_whatsapp_url: str = Field(
+        "https://wa.me/8613662729512?text=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5%2C%20%D0%BC%D0%BD%D0%B5%20%D0%BD%D1%83%D0%B6%D0%BD%D0%BE%20%D1%83%D0%B7%D0%BD%D0%B0%D1%82%D1%8C%20%D0%BE%20%D1%83%D1%81%D0%BB%D1%83%D0%B3%D0%B0%D1%85%20%D0%B0%D0%B2%D0%B8%D0%B0%D0%BF%D0%B5%D1%80%D0%B5%D0%B2%D0%BE%D0%B7%D0%BE%D0%BA%20%D0%B3%D1%80%D1%83%D0%B7%D0%BE%D0%B2.",
+        description="现货查询 WhatsApp 联系链接（含预填消息）"
+    )
     aliexpress_store_url: str = Field(
         "https://www.aliexpress.com", description="速卖通店铺链接"
     )
