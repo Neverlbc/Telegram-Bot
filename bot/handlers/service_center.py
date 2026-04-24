@@ -404,7 +404,7 @@ async def on_sn_query_input(
 
     lines = []
     for r in results:
-        lines.append(r.format_text())
+        lines.append(r.format_text(lang))
         lines.append("")
     text = "\n".join(lines).strip()
     await message.answer(text, reply_markup=builder.as_markup())

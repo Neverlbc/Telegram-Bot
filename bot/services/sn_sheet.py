@@ -40,9 +40,20 @@ class SNRecord:
     sn: str
     notes: str = ""
 
-    def format_text(self) -> str:
-        lines = [f"🏷 <b>{self.brand}</b> — {self.model}",
-                 f"SN: <code>{self.sn}</code>"]
+    def format_text(self, lang: str = "zh") -> str:
+        labels = {
+            "zh": ("品牌", "型号", "序列号", "✅ 该设备记录存在"),
+            "en": ("Brand", "Model", "Serial No.", "✅ Device record found"),
+            "ru": ("Бренд", "Модель", "Серийный номер", "✅ Устройство найдено"),
+        }.get(lang, ("品牌", "型号", "序列号", "✅ 该设备记录存在"))
+
+        lines = [
+            labels[3],
+            "",
+            f"<b>{labels[0]}：</b>{self.brand}",
+            f"<b>{labels[1]}：</b>{self.model}",
+            f"<b>{labels[2]}：</b><code>{self.sn}</code>",
+        ]
         if self.notes and self.notes.lower() != "notes":
             lines.append(f"📝 {self.notes}")
         return "\n".join(lines)
