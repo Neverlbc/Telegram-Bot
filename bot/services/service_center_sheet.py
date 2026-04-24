@@ -26,16 +26,16 @@ SHEETS_CSV_URL = (
 )
 CACHE_TTL = 120  # 2 分钟（状态查询需要更新鲜）
 
-# 列名配置 — 与实际 Sheet 表头对应
-COL_CDEK_IN = "寄件CDEK单号"     # 客户寄来的 CDEK 单号
-COL_SN = "SN"
-COL_MODEL = "型号"
-COL_STATUS = "检修状态"
-COL_CUSTOMER_TG = "客户TGID"     # 客户 Telegram 数字 ID
-COL_CDEK_OUT = "回寄CDEK单号"    # 维修完成后回寄客户的单号
-COL_NOTES = "备注"
+# 列名配置 — 与实际 Sheet 表头对应（After sales management tab）
+COL_CDEK_IN = "Send tracking number"        # G: 客户寄件单号（查询关键字）
+COL_SN = "SN"                               # B
+COL_MODEL = "SKU Name"                      # A
+COL_STATUS = "State"                        # H: Done / In Progress
+COL_CUSTOMER_TG = ""                        # 表格无此列，用 Redis watcher 替代
+COL_CDEK_OUT = "Repair completion tracking number"  # I: 回寄单号（列名待确认）
+COL_NOTES = "Detailed information"          # E
 
-SC_GID = 921834481
+SC_GID = 1205973697  # After sales management tab
 
 _redis_client: Redis | None = None
 
@@ -58,14 +58,16 @@ class RepairRecord:
     notes: str = ""
 
     def status_emoji(self) -> str:
-        s = self.status.strip()
-        if "完成" in s or "done" in s.lower() or "завершён" in s.lower():
+        s = self.status.strip().lower()
+        if s == "done":
             return "✅"
-        if "中" in s or "progress" in s.lower() or "ремонт" in s.lower():
+        if s == "in progress":
             return "🔧"
-        if "回" in s or "shipped" in s.lower() or "отправлен" in s.lower():
+        if "shipped" in s or "отправлен" in s or "回" in s:
             return "📦"
-        return "⏳"
+        if s:
+            return "⏳"
+        return "❓"
 
 
 def _parse_csv(csv_text: str) -> list[RepairRecord]:
