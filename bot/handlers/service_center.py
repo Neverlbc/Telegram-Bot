@@ -65,10 +65,12 @@ TEXTS: dict[str, dict[str, str]] = {
             "检修状态：{emoji} {status}\n"
             "{cdek_out_line}"
             "{repair_summary_line}"
-            "\n✅ 已订阅状态更新，有变更时将自动通知您。"
+            "\n{notify_line}"
         ),
         "cdek_out_line": "回寄单号：<code>{cdek_out}</code>\n",
         "repair_summary_line": "维修报告：{summary}\n",
+        "notify_done": "📦 您的设备已从服务中心寄回，请及时关注 CDEK 状态。",
+        "notify_watch": "✅ 已订阅状态更新，有变更时将自动通知您。",
         "enter_admin_pw": "🔐 请输入管理员密码：",
         "wrong_admin_pw": "❌ 密码错误。",
         "admin_title": "🔐 <b>服务中心管理后台</b>\n\n请选择操作：",
@@ -107,10 +109,12 @@ TEXTS: dict[str, dict[str, str]] = {
             "Status: {emoji} {status}\n"
             "{cdek_out_line}"
             "{repair_summary_line}"
-            "\n✅ Subscribed to updates — you'll be notified on any change."
+            "\n{notify_line}"
         ),
         "cdek_out_line": "Return CDEK No.: <code>{cdek_out}</code>\n",
         "repair_summary_line": "Repair Report: {summary}\n",
+        "notify_done": "📦 Your device has been shipped back from the service center. Please track your CDEK status.",
+        "notify_watch": "✅ Subscribed to updates — you'll be notified on any change.",
         "enter_admin_pw": "🔐 Enter admin password:",
         "wrong_admin_pw": "❌ Incorrect password.",
         "admin_title": "🔐 <b>Service Center Admin</b>\n\nSelect an action:",
@@ -149,10 +153,12 @@ TEXTS: dict[str, dict[str, str]] = {
             "Статус: {emoji} {status}\n"
             "{cdek_out_line}"
             "{repair_summary_line}"
-            "\n✅ Вы подписаны на обновления — уведомим при изменении."
+            "\n{notify_line}"
         ),
         "cdek_out_line": "Номер CDEK для возврата: <code>{cdek_out}</code>\n",
         "repair_summary_line": "Отчёт о ремонте: {summary}\n",
+        "notify_done": "📦 Ваше устройство отправлено из сервисного центра. Следите за статусом CDEK.",
+        "notify_watch": "✅ Вы подписаны на обновления — уведомим при изменении.",
         "enter_admin_pw": "🔐 Введите пароль администратора:",
         "wrong_admin_pw": "❌ Неверный пароль.",
         "admin_title": "🔐 <b>Панель администратора</b>\n\nВыберите действие:",
@@ -275,11 +281,14 @@ async def on_cdek_no_input(
 
     cdek_out_line = ""
     repair_summary_line = ""
-    if record.status.strip().lower() == "done":
+    is_done = record.status.strip().lower() == "done"
+    if is_done:
         if record.cdek_out:
             cdek_out_line = _t(lang, "cdek_out_line").format(cdek_out=record.cdek_out)
         if record.repair_summary:
             repair_summary_line = _t(lang, "repair_summary_line").format(summary=record.repair_summary)
+
+    notify_line = _t(lang, "notify_done") if is_done else _t(lang, "notify_watch")
 
     text = _t(lang, "cdek_result").format(
         cdek_in=record.cdek_in,
@@ -289,6 +298,7 @@ async def on_cdek_no_input(
         status=record.status or "-",
         cdek_out_line=cdek_out_line,
         repair_summary_line=repair_summary_line,
+        notify_line=notify_line,
     )
     await message.answer(text, reply_markup=builder.as_markup())
 
