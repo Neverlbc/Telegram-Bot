@@ -35,7 +35,7 @@ COL_CUSTOMER_TG = "客户TGID"     # 客户 Telegram 数字 ID
 COL_CDEK_OUT = "回寄CDEK单号"    # 维修完成后回寄客户的单号
 COL_NOTES = "备注"
 
-SC_GID = 0  # 默认第一个 tab
+SC_GID = 921834481
 
 _redis_client: Redis | None = None
 

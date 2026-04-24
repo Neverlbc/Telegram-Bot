@@ -24,14 +24,14 @@ SHEETS_CSV_URL = (
 )
 CACHE_TTL = 300
 
-COL_MODEL = "型号"
-COL_DISCOUNT = "折扣"     # 如 "10%"
-COL_LINK = "链接"
-COL_CODE = "折扣码"
-COL_ACTIVE = "是否有效"  # 1/yes → 有效
-COL_NOTES = "备注"
+COL_MODEL = "SKU"
+COL_DISCOUNT = "discount"  # 折扣码
+COL_LINK = "Links"
+COL_CODE = "discount"      # 和折扣码同列
+COL_ACTIVE = "active"      # 1/yes → 有效（可选列，缺省视为有效）
+COL_NOTES = "Notes"
 
-DISCOUNT_GID = 0
+DISCOUNT_GID = 1376031396
 
 _redis_client: Redis | None = None
 
