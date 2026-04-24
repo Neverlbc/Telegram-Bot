@@ -6,4 +6,4 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class InventoryStates(StatesGroup):
-    awaiting_vip_password = State()
+    pass  # VIP 入口已改为直接发文本密码触发，无需 FSM 状态

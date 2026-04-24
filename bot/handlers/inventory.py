@@ -32,8 +32,6 @@ TEXTS: dict[str, dict[str, str]] = {
     "zh": {
         "menu_title": "🔍 <b>莫斯科现货查询</b>\n\n请选择查询方式：",
         "category_title": "📂 请选择品类：",
-        "enter_password": "🔐 请输入 VIP 查询密码：",
-        "wrong_password": "❌ 密码错误，请重新输入，或点击 /cancel 取消。",
         "stock_title_public": "📦 <b>莫斯科 · 户外类现货</b>（公开库存）\n\n",
         "stock_title_vip": "⭐ <b>莫斯科 · 户外类现货</b>（VIP 完整库存）\n\n",
         "no_stock_public": "❌ 当前暂无公开库存。\n\n如需进一步了解，请联系客服：",
@@ -49,8 +47,6 @@ TEXTS: dict[str, dict[str, str]] = {
     "en": {
         "menu_title": "🔍 <b>Moscow Inventory Query</b>\n\nSelect query type:",
         "category_title": "📂 Select category:",
-        "enter_password": "🔐 Please enter the VIP query password:",
-        "wrong_password": "❌ Wrong password. Please try again or /cancel.",
         "stock_title_public": "📦 <b>Moscow · Outdoor Stock</b> (Public)\n\n",
         "stock_title_vip": "⭐ <b>Moscow · Outdoor Stock</b> (VIP Full View)\n\n",
         "no_stock_public": "❌ No public inventory available.\n\nContact support:",
@@ -66,8 +62,6 @@ TEXTS: dict[str, dict[str, str]] = {
     "ru": {
         "menu_title": "🔍 <b>Наличие в Москве</b>\n\nВыберите тип запроса:",
         "category_title": "📂 Выберите категорию:",
-        "enter_password": "🔐 Введите пароль VIP-запроса:",
-        "wrong_password": "❌ Неверный пароль. Попробуйте ещё раз или /cancel.",
         "stock_title_public": "📦 <b>Москва · Аутдор — наличие</b> (общий)\n\n",
         "stock_title_vip": "⭐ <b>Москва · Аутдор — наличие</b> (VIP полный список)\n\n",
         "no_stock_public": "❌ Публичный список пуст.\n\nСвяжитесь с поддержкой:",
