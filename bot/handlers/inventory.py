@@ -123,10 +123,10 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
     statuses = [i.status_text(lang) for i in items]
     notes = [i.notes or "-" for i in items]
 
-    name_w = max(_display_width(hdr[0]), min(max(_display_width(n) for n in names), 18))
+    name_w = max(_display_width(hdr[0]), min(max(_display_width(n) for n in names), 16))
     qty_w = max(_display_width(hdr[1]), max(_display_width(q) for q in qtys))
     status_w = max(_display_width(hdr[2]), max(_display_width(s) for s in statuses))
-    notes_w = max(_display_width(hdr[3]), min(max(_display_width(n) for n in notes), 14))
+    notes_w = max(_display_width(hdr[3]), min(max(_display_width(n) for n in notes), 10))
 
     header = (
         f"{_fit_cell(hdr[0], name_w)} "
@@ -134,7 +134,7 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
         f"{_fit_cell(hdr[2], status_w)} "
         f"{_fit_cell(hdr[3], notes_w)}"
     )
-    sep = "─" * (name_w + qty_w + status_w + notes_w + 3)
+    sep = "─" * min(32, name_w + qty_w + status_w + notes_w + 3)
     other_brand = {"zh": "其他", "en": "Other", "ru": "Другое"}.get(lang, "其他")
 
     rows: list[str] = []
