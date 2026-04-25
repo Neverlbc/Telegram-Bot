@@ -33,6 +33,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "menu_title": "🔍 <b>莫斯科现货查询</b>\n\n请选择查询方式：",
         "category_title": "📂 请选择品类：",
         "brand_title": "🏷 <b>请选择品牌</b>\n\n点击品牌查看对应库存：",
+        "quick_title_public": "⚡ <b>快速展示 · 当前有货</b>（公开库存）\n\n",
+        "quick_title_vip": "⚡ <b>快速展示 · 当前有货</b>（VIP 完整库存）\n\n",
+        "quick_empty_public": "📭 当前公开库存暂无有货商品。\n\n如需进一步了解，请联系客服：",
+        "quick_empty_vip": "📭 当前 VIP 库存暂无有货商品。\n\n如需预约空运，请联系：",
         "stock_title_public": "📦 <b>莫斯科 · 户外类现货</b>（公开库存）\n\n",
         "stock_title_vip": "⭐ <b>莫斯科 · 户外类现货</b>（VIP 完整库存）\n\n",
         "no_stock_public": "❌ 当前暂无公开库存。\n\n如需进一步了解，请联系客服：",
@@ -47,6 +51,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "menu_title": "🔍 <b>Moscow Inventory Query</b>\n\nSelect query type:",
         "category_title": "📂 Select category:",
         "brand_title": "🏷 <b>Select a brand</b>\n\nTap a brand to view inventory:",
+        "quick_title_public": "⚡ <b>Quick View · In Stock</b> (Public)\n\n",
+        "quick_title_vip": "⚡ <b>Quick View · In Stock</b> (VIP Full View)\n\n",
+        "quick_empty_public": "📭 No in-stock public items at the moment.\n\nContact support:",
+        "quick_empty_vip": "📭 No in-stock VIP items at the moment.\n\nTo book air freight:",
         "stock_title_public": "📦 <b>Moscow · Outdoor Stock</b> (Public)\n\n",
         "stock_title_vip": "⭐ <b>Moscow · Outdoor Stock</b> (VIP Full View)\n\n",
         "no_stock_public": "❌ No public inventory available.\n\nContact support:",
@@ -61,6 +69,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "menu_title": "🔍 <b>Наличие в Москве</b>\n\nВыберите тип запроса:",
         "category_title": "📂 Выберите категорию:",
         "brand_title": "🏷 <b>Выберите бренд</b>\n\nНажмите бренд, чтобы посмотреть наличие:",
+        "quick_title_public": "⚡ <b>Быстрый просмотр · В наличии</b> (общий)\n\n",
+        "quick_title_vip": "⚡ <b>Быстрый просмотр · В наличии</b> (VIP полный список)\n\n",
+        "quick_empty_public": "📭 Сейчас нет товаров в наличии в публичном списке.\n\nСвяжитесь с поддержкой:",
+        "quick_empty_vip": "📭 Сейчас нет товаров в наличии в VIP списке.\n\nДля заказа авиадоставки:",
         "stock_title_public": "📦 <b>Москва · Аутдор — наличие</b> (общий)\n\n",
         "stock_title_vip": "⭐ <b>Москва · Аутдор — наличие</b> (VIP полный список)\n\n",
         "no_stock_public": "❌ Публичный список пуст.\n\nСвяжитесь с поддержкой:",
@@ -191,9 +203,22 @@ def _filter_brand_items(items: list[OutdoorItem], brand: str, lang: str = "zh") 
     return [item for item in items if (item.brand or other_brand) == brand]
 
 
+def _available_items(items: list[OutdoorItem]) -> list[OutdoorItem]:
+    return [item for item in items if item.qty > 0]
+
+
 def _brand_keyboard(items: list[OutdoorItem], lang: str, vip: bool) -> InlineKeyboardBuilder:
     brands = _ordered_brands(items, lang)
+    available_count = len(_available_items(items))
     builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text={
+            "zh": f"⚡ 快速展示有货 ({available_count})",
+            "en": f"⚡ In-stock Quick View ({available_count})",
+            "ru": f"⚡ Быстрый просмотр ({available_count})",
+        }.get(lang, f"⚡ 快速展示有货 ({available_count})"),
+        callback_data=InventoryCallback(action="quick", cat_id="outdoor", vip=vip).pack(),
+    ))
     for idx, brand in enumerate(brands, start=1):
         count = len(_filter_brand_items(items, brand, lang))
         builder.row(InlineKeyboardButton(
@@ -392,6 +417,68 @@ async def on_inventory_brand(
     text = _t(lang, title_key) + table_html + _t(lang, "data_delay")
 
     user_id = callback.from_user.id if callback.from_user else None
+    builder.row(*_contact_buttons(lang, vip, user_id))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "◀️ 返回品牌", "en": "◀️ Brands", "ru": "◀️ Бренды"}.get(lang, "◀️ Brands"),
+        callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 Main Menu"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+
+    await callback.message.edit_text(text, reply_markup=builder.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "quick"))
+async def on_inventory_quick(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+) -> None:
+    """快速展示所有品牌中当前有货的库存."""
+    if not callback.message:
+        return
+
+    vip = callback_data.vip
+
+    if not settings.outdoor_sheet_id:
+        await callback.message.edit_text(_t(lang, "not_configured"))
+        await callback.answer()
+        return
+
+    try:
+        items = await get_outdoor_inventory(vip=vip)
+    except Exception as e:
+        logger.error("get_outdoor_inventory failed: %s", e)
+        await callback.message.edit_text(_t(lang, "loading_err"))
+        await callback.answer()
+        return
+
+    available_items = _available_items(items)
+    builder = InlineKeyboardBuilder()
+    user_id = callback.from_user.id if callback.from_user else None
+
+    if not available_items:
+        builder.row(*_contact_buttons(lang, vip, user_id))
+        builder.row(InlineKeyboardButton(
+            text={"zh": "◀️ 返回品牌", "en": "◀️ Brands", "ru": "◀️ Бренды"}.get(lang, "◀️ Brands"),
+            callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip).pack(),
+        ))
+        builder.row(InlineKeyboardButton(
+            text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 Main Menu"),
+            callback_data=NavCallback(action="home").pack(),
+        ))
+        empty_key = "quick_empty_vip" if vip else "quick_empty_public"
+        await callback.message.edit_text(_t(lang, empty_key), reply_markup=builder.as_markup())
+        await callback.answer()
+        return
+
+    title_key = "quick_title_vip" if vip else "quick_title_public"
+    table_html = _format_outdoor_table(available_items, lang)
+    text = _t(lang, title_key) + table_html + _t(lang, "data_delay")
+
     builder.row(*_contact_buttons(lang, vip, user_id))
     builder.row(InlineKeyboardButton(
         text={"zh": "◀️ 返回品牌", "en": "◀️ Brands", "ru": "◀️ Бренды"}.get(lang, "◀️ Brands"),

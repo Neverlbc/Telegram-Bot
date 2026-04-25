@@ -75,7 +75,7 @@ class NavCallback(CallbackData, prefix="nav"):
 class InventoryCallback(CallbackData, prefix="inv"):
     """莫斯科现货查询."""
 
-    action: str  # menu / public_query / vip_enter_password / categories / category / brand / show
+    action: str  # menu / public_query / vip_enter_password / categories / category / quick / brand / show
     cat_id: str = ""   # 品类 key (如 "outdoor")
     vip: bool = False  # 是否 VIP 完整视图
     page: int = 1
