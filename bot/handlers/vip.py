@@ -103,6 +103,40 @@ def _agent_url(prefill: str) -> str:
     return f"https://t.me/{_agent_username()}?text={urllib.parse.quote(prefill)}"
 
 
+def _is_real_url(url: str) -> bool:
+    import urllib.parse
+
+    normalized = url.strip().rstrip("/")
+    placeholders = {
+        "",
+        "https://www.aliexpress.com",
+        "http://www.aliexpress.com",
+        "https://aliexpress.com",
+        "http://aliexpress.com",
+    }
+    if normalized in placeholders:
+        return False
+    parsed = urllib.parse.urlparse(normalized)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _shipping_payment_url() -> str:
+    shipping_url = settings.aliexpress_shipping_url.strip()
+    if _is_real_url(shipping_url):
+        return shipping_url
+
+    store_url = settings.aliexpress_store_url.strip()
+    if _is_real_url(store_url):
+        return store_url
+
+    return ""
+
+
+def _airfreight_prefill(user_id: int | None) -> str:
+    tag = f"，TGID:{user_id}" if user_id else ""
+    return f"你好，我需要了解航空货运服务。来源：Vandych的帐篷{tag}"
+
+
 def _is_vandych_password(text: str | None) -> bool:
     return bool(text and text.strip() == settings.vandych_password)
 
@@ -292,10 +326,10 @@ async def on_sku_select(
 async def on_vip_shipping(callback: CallbackQuery, lang: str = "zh") -> None:
     if not callback.message:
         return
-    url = settings.aliexpress_shipping_url
+    url = _shipping_payment_url()
     code = settings.vandych_shipping_discount_code.strip()
     builder = InlineKeyboardBuilder()
-    if url and "aliexpress.com" in url and url != "https://www.aliexpress.com":
+    if url:
         builder.row(InlineKeyboardButton(
             text={"zh": "🛒 前往支付", "en": "🛒 Pay Now", "ru": "🛒 Оплатить"}.get(lang, "🛒"),
             url=url,
@@ -305,6 +339,11 @@ async def on_vip_shipping(callback: CallbackQuery, lang: str = "zh") -> None:
             text += _t(lang, "shipping_code").format(code=escape(code))
     else:
         text = _t(lang, "shipping_no_url")
+        user_id = callback.from_user.id if callback.from_user else None
+        builder.row(InlineKeyboardButton(
+            text={"zh": "💬 联系专属客服", "en": "💬 Contact Support", "ru": "💬 Поддержка"}.get(lang, "💬"),
+            url=_agent_url(_airfreight_prefill(user_id)),
+        ))
     for row in [
         [InlineKeyboardButton(
             text={"zh": "◀️ 返回", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️"),
