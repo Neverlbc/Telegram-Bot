@@ -59,6 +59,37 @@ _DIGIT_RE = re.compile(r"\d")
 
 _redis_client: Redis | None = None
 
+_STATE_LABELS: dict[str, dict[str, str]] = {
+    "available": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
+    "in stock": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
+    "instock": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
+    "有货": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
+    "в наличии": {"zh": "有货", "en": "In stock", "ru": "В наличии"},
+    "out of stock": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+    "sold out": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+    "缺货": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+    "无货": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+    "нет в наличии": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+    "распродано": {"zh": "缺货", "en": "Out of stock", "ru": "Нет в наличии"},
+}
+
+_NOTE_LABELS: dict[str, dict[str, str]] = {
+    "在途中": {"zh": "在途中", "en": "In transit", "ru": "В пути"},
+    "正在运输途中": {"zh": "在途中", "en": "In transit", "ru": "В пути"},
+    "in transit": {"zh": "在途中", "en": "In transit", "ru": "В пути"},
+    "в пути": {"zh": "在途中", "en": "In transit", "ru": "В пути"},
+}
+
+_EMPTY_NOTE_LABELS = {
+    "",
+    "-",
+    "—",
+    "none",
+    "null",
+    "n/a",
+    "для получения более подробной информации, пожалуйста, свяжитесь со службой поддержки клиентов",
+}
+
 
 def _get_redis() -> Redis | None:
     global _redis_client
@@ -81,10 +112,30 @@ class OutdoorItem:
 
     def status_text(self, lang: str = "zh") -> str:
         if self.state:
-            return self.state
+            label = _localized_label(self.state, _STATE_LABELS, lang)
+            return label or self.state
         if self.is_available:
             return {"zh": "✅ 有货", "en": "✅ In stock", "ru": "✅ В наличии"}.get(lang, "✅ 有货")
         return {"zh": "❌ 无货", "en": "❌ Out of stock", "ru": "❌ Нет в наличии"}.get(lang, "❌ 无货")
+
+    def notes_text(self, lang: str = "zh") -> str:
+        normalized = _normalize_label(self.notes)
+        if normalized in _EMPTY_NOTE_LABELS:
+            return "-"
+        label = _localized_label(self.notes, _NOTE_LABELS, lang)
+        return label or self.notes
+
+
+def _normalize_label(value: str) -> str:
+    normalized = " ".join((value or "").strip().split()).casefold()
+    return normalized.strip("✅✔☑❌✖⛔🚫🟢🔴⚠️ .。:：-—")
+
+
+def _localized_label(value: str, labels: dict[str, dict[str, str]], lang: str) -> str:
+    label = labels.get(_normalize_label(value))
+    if not label:
+        return ""
+    return label.get(lang, label["zh"])
 
 
 @dataclass

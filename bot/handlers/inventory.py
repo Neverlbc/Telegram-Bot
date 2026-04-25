@@ -136,7 +136,7 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
     names = [i.sku for i in items]
     qtys = [str(i.qty) for i in items]
     statuses = [i.status_text(lang) for i in items]
-    notes = [i.notes or "-" for i in items]
+    notes = [i.notes_text(lang) for i in items]
 
     name_w = max(_display_width(hdr[0]), min(max(_display_width(n) for n in names), 15))
     qty_w = max(_display_width(hdr[1]), max(_display_width(q) for q in qtys))
@@ -167,7 +167,7 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
         name_lines = _wrap_cell(item.sku, name_w)
         qty_lines = _wrap_cell(str(item.qty), qty_w)
         status_lines = _wrap_cell(item.status_text(lang), status_w)
-        note_lines = _wrap_cell(item.notes or "-", notes_w)
+        note_lines = _wrap_cell(item.notes_text(lang), notes_w)
         h = max(len(name_lines), len(qty_lines), len(status_lines), len(note_lines))
         for i in range(h):
             nv = name_lines[i] if i < len(name_lines) else ""
