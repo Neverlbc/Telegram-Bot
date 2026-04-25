@@ -236,6 +236,35 @@ def _brand_keyboard(items: list[OutdoorItem], lang: str, vip: bool) -> InlineKey
     return builder
 
 
+def _inventory_whatsapp_url(lang: str, vip: bool, user_id: int | None = None) -> str:
+    import urllib.parse
+
+    parsed = urllib.parse.urlparse(settings.inventory_whatsapp_url)
+    query = urllib.parse.parse_qs(parsed.query)
+    phone = (query.get("phone") or [""])[0]
+    if not phone and parsed.netloc.endswith("wa.me"):
+        phone = parsed.path.strip("/")
+
+    if not phone:
+        return settings.inventory_whatsapp_url
+
+    tag = f"\nTGID:{user_id}" if user_id else ""
+    if vip:
+        text = {
+            "zh": f"你好，我需要了解航空货运服务。{tag}",
+            "en": f"Hi, I'd like to ask about air freight service.{tag}",
+            "ru": f"Здравствуйте, мне нужно узнать об авиаперевозке грузов.{tag}",
+        }.get(lang, f"Hi, air freight inquiry.{tag}")
+    else:
+        text = {
+            "zh": f"你好，我想咨询产品库存和购买信息。{tag}",
+            "en": f"Hi, I'd like to ask about product stock and purchase information.{tag}",
+            "ru": f"Здравствуйте, хочу узнать о наличии товара и покупке.{tag}",
+        }.get(lang, f"Hi, product inquiry.{tag}")
+
+    return f"https://wa.me/{phone}?text={urllib.parse.quote(text)}"
+
+
 # ── 联系按钮构建（TG + WhatsApp 两个按钮）────────────────
 
 def _contact_buttons(lang: str, vip: bool, user_id: int | None = None) -> list[InlineKeyboardButton]:
@@ -257,7 +286,7 @@ def _contact_buttons(lang: str, vip: bool, user_id: int | None = None) -> list[I
     tg_url = f"https://t.me/{settings.inventory_agent_username}?text={urllib.parse.quote(prefill)}"
     return [
         InlineKeyboardButton(text=_t(lang, "contact_tg"), url=tg_url),
-        InlineKeyboardButton(text=_t(lang, "contact_wa"), url=settings.inventory_whatsapp_url),
+        InlineKeyboardButton(text=_t(lang, "contact_wa"), url=_inventory_whatsapp_url(lang, vip, user_id)),
     ]
 
 
