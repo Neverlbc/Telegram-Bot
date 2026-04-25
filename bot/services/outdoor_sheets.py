@@ -38,6 +38,19 @@ COL_NOTES = "Notes"
 OUTDOOR_GID_FULL     = 0          # Stock_Outdoor【完整版】VIP 视图
 OUTDOOR_GID_FILTERED = 644083927  # Stock_Outdoor【阈割版】公开视图
 
+OUTDOOR_SHEET_CONFIG: dict[str, dict[str, str | int | bool]] = {
+    "outdoor_vip": {
+        "gid": OUTDOOR_GID_FULL,
+        "vip": True,
+        "name": "VIP 完整库存",
+    },
+    "outdoor_public": {
+        "gid": OUTDOOR_GID_FILTERED,
+        "vip": False,
+        "name": "公开库存",
+    },
+}
+
 _redis_client: Redis | None = None
 
 
@@ -67,6 +80,29 @@ class OutdoorItem:
         return {"zh": "❌ 无货", "en": "❌ Out of stock", "ru": "❌ Нет в наличии"}.get(lang, "❌ 无货")
 
 
+@dataclass
+class OutdoorSyncRow:
+    """库存同步用行数据，保留空 QTYS 行以便计算后回写."""
+
+    sku: str
+    qty_text: str = ""
+    state: str = ""
+    notes: str = ""
+
+    @property
+    def has_existing_qty(self) -> bool:
+        return bool(self.qty_text.strip())
+
+
+async def _fetch_outdoor_csv(gid: int) -> str:
+    url = SHEETS_CSV_URL.format(sheet_id=settings.outdoor_sheet_id, gid=gid)
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as http:
+        async with http.get(url) as resp:
+            resp.raise_for_status()
+            return await resp.text(encoding="utf-8")
+
+
 def _parse_csv(csv_text: str) -> list[OutdoorItem]:
     items: list[OutdoorItem] = []
     reader = csv.DictReader(io.StringIO(csv_text))
@@ -86,6 +122,24 @@ def _parse_csv(csv_text: str) -> list[OutdoorItem]:
         notes = row.get(COL_NOTES, "").strip()
         items.append(OutdoorItem(sku=sku, qty=qty, state=state, notes=notes))
     return items
+
+
+def _parse_sync_rows(csv_text: str) -> list[OutdoorSyncRow]:
+    rows: list[OutdoorSyncRow] = []
+    reader = csv.DictReader(io.StringIO(csv_text))
+    for row in reader:
+        sku = row.get(COL_SKU, "").strip()
+        if not sku:
+            continue
+        rows.append(
+            OutdoorSyncRow(
+                sku=sku,
+                qty_text=row.get(COL_QTY, "").strip(),
+                state=row.get(COL_STATE, "").strip(),
+                notes=row.get(COL_NOTES, "").strip(),
+            )
+        )
+    return rows
 
 
 async def get_outdoor_inventory(vip: bool = False) -> list[OutdoorItem]:
@@ -111,14 +165,10 @@ async def get_outdoor_inventory(vip: bool = False) -> list[OutdoorItem]:
         except Exception as e:
             logger.warning("Redis read failed: %s", e)
 
-    url = SHEETS_CSV_URL.format(sheet_id=sheet_id, gid=gid)
     try:
-        async with aiohttp.ClientSession() as http:
-            async with http.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                resp.raise_for_status()
-                csv_text = await resp.text(encoding="utf-8")
+        csv_text = await _fetch_outdoor_csv(gid)
     except Exception as e:
-        logger.error("Failed to fetch outdoor sheet: %s", e)
+        logger.error("Failed to fetch outdoor sheet: %r", e)
         return []
 
     if redis is not None:
@@ -128,6 +178,31 @@ async def get_outdoor_inventory(vip: bool = False) -> list[OutdoorItem]:
             logger.warning("Redis write failed: %s", e)
 
     return _parse_csv(csv_text)
+
+
+async def get_outdoor_sync_rows(sheet_key: str) -> list[OutdoorSyncRow]:
+    """读取 Outdoor 同步目标表的 SKU 行.
+
+    与展示查询不同，同步必须读取 QTYS 为空的 SKU 行，否则首次回写无法覆盖空表。
+    """
+    sheet_id = settings.outdoor_sheet_id
+    if not sheet_id:
+        logger.warning("outdoor_sheet_id not configured")
+        return []
+
+    config = OUTDOOR_SHEET_CONFIG.get(sheet_key)
+    if not config:
+        logger.warning("Unknown outdoor sheet_key: %s", sheet_key)
+        return []
+
+    gid = int(config["gid"])
+    try:
+        csv_text = await _fetch_outdoor_csv(gid)
+    except Exception as e:
+        logger.error("Failed to fetch outdoor sync sheet %s (gid=%d): %r", sheet_key, gid, e)
+        return []
+
+    return _parse_sync_rows(csv_text)
 
 
 async def clear_outdoor_cache() -> None:

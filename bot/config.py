@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -105,6 +106,13 @@ class Settings(BaseSettings):
     outdoor_sheet_id: str = Field("", description="莫斯科户外现货 Google Sheet ID")
     service_center_sheet_id: str = Field("", description="服务中心检修 Google Sheet ID")
     discount_sheet_id: str = Field("", description="促销折扣 Google Sheet ID")
+    outdoor_sku_aliases: str = Field(
+        "",
+        description=(
+            "Outdoor 库存 SKU 映射 JSON。格式："
+            '{"表格SKU":{"jst":["聚水潭SKU"],"kyb":["KYB SKU"]}}'
+        ),
+    )
 
     # ── 日志 ──────────────────────────────────────────
     log_level: str = Field("INFO")
@@ -116,6 +124,50 @@ class Settings(BaseSettings):
         if not self.admin_ids.strip():
             return []
         return [int(x.strip()) for x in self.admin_ids.split(",") if x.strip()]
+
+    @property
+    def outdoor_sku_alias_map(self) -> dict[str, dict[str, list[str]]]:
+        """解析 Outdoor SKU 映射配置.
+
+        支持：
+        - {"表格SKU": {"jst": "JSTSKU", "kyb": "KYBSKU"}}
+        - {"表格SKU": {"jst": ["JST1", "JST2"], "kyb": ["KYB1"]}}
+        - {"表格SKU": ["COMMON1", "COMMON2"]}  # 同时用于 JST/KYB
+        """
+        raw = self.outdoor_sku_aliases.strip()
+        if not raw:
+            return {}
+
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError("OUTDOOR_SKU_ALIASES 必须是 JSON object")
+
+        result: dict[str, dict[str, list[str]]] = {}
+        for sheet_sku, aliases in parsed.items():
+            if not isinstance(sheet_sku, str) or not sheet_sku.strip():
+                continue
+
+            def normalize(value: Any) -> list[str]:
+                if value is None:
+                    return []
+                if isinstance(value, str):
+                    return [value.strip()] if value.strip() else []
+                if isinstance(value, list):
+                    return [str(item).strip() for item in value if str(item).strip()]
+                return [str(value).strip()] if str(value).strip() else []
+
+            if isinstance(aliases, dict):
+                result[sheet_sku.strip()] = {
+                    "jst": normalize(aliases.get("jst")),
+                    "kyb": normalize(aliases.get("kyb")),
+                }
+            else:
+                common_aliases = normalize(aliases)
+                result[sheet_sku.strip()] = {
+                    "jst": common_aliases,
+                    "kyb": common_aliases,
+                }
+        return result
 
     # ── 派生属性 ──────────────────────────────────────
 

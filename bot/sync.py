@@ -1,8 +1,9 @@
 """库存同步脚本 — 独立运行入口.
 
 用法：
-    python -m bot.sync                # 同步所有分类
-    python -m bot.sync thermal_industrial  # 同步单个分类
+    python -m bot.sync                # 同步 Outdoor 公开 + VIP 库存
+    python -m bot.sync outdoor_vip    # 仅同步 VIP 完整表
+    python -m bot.sync outdoor_public # 仅同步公开表
 
 cron 示例（每小时执行）：
     0 * * * * cd /app && python -m bot.sync >> /var/log/inventory_sync.log 2>&1
