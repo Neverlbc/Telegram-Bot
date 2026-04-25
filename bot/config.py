@@ -94,7 +94,8 @@ class Settings(BaseSettings):
         "https://www.aliexpress.com", description="速卖通店铺链接"
     )
     aliexpress_shipping_url: str = Field(
-        "https://www.aliexpress.com", description="Vandych VIP 空运支付链接"
+        "https://aliexpress.ru/item/1005012163395302.html?gatewayAdapt=glo2rus&sku_id=12000057659415460",
+        description="Vandych VIP 空运支付链接",
     )
     vandych_shipping_discount_code: str = Field("", description="Vandych 空运支付折扣码")
 

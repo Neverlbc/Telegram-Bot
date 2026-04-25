@@ -29,6 +29,11 @@ from bot.states.vip import VipStates
 logger = logging.getLogger(__name__)
 router = Router(name="vip")
 
+VANDYCH_DEFAULT_SHIPPING_URL = (
+    "https://aliexpress.ru/item/1005012163395302.html"
+    "?gatewayAdapt=glo2rus&sku_id=12000057659415460"
+)
+
 TEXTS: dict[str, dict[str, str]] = {
     "zh": {
         "welcome": (
@@ -132,7 +137,7 @@ def _shipping_payment_url() -> str:
     if _is_real_url(store_url):
         return store_url
 
-    return ""
+    return VANDYCH_DEFAULT_SHIPPING_URL
 
 
 def _airfreight_prefill(user_id: int | None) -> str:
