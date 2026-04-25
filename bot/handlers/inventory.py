@@ -32,6 +32,7 @@ TEXTS: dict[str, dict[str, str]] = {
     "zh": {
         "menu_title": "🔍 <b>莫斯科现货查询</b>\n\n请选择查询方式：",
         "category_title": "📂 请选择品类：",
+        "brand_title": "🏷 <b>请选择品牌</b>\n\n点击品牌查看对应库存：",
         "stock_title_public": "📦 <b>莫斯科 · 户外类现货</b>（公开库存）\n\n",
         "stock_title_vip": "⭐ <b>莫斯科 · 户外类现货</b>（VIP 完整库存）\n\n",
         "no_stock_public": "❌ 当前暂无公开库存。\n\n如需进一步了解，请联系客服：",
@@ -45,6 +46,7 @@ TEXTS: dict[str, dict[str, str]] = {
     "en": {
         "menu_title": "🔍 <b>Moscow Inventory Query</b>\n\nSelect query type:",
         "category_title": "📂 Select category:",
+        "brand_title": "🏷 <b>Select a brand</b>\n\nTap a brand to view inventory:",
         "stock_title_public": "📦 <b>Moscow · Outdoor Stock</b> (Public)\n\n",
         "stock_title_vip": "⭐ <b>Moscow · Outdoor Stock</b> (VIP Full View)\n\n",
         "no_stock_public": "❌ No public inventory available.\n\nContact support:",
@@ -58,6 +60,7 @@ TEXTS: dict[str, dict[str, str]] = {
     "ru": {
         "menu_title": "🔍 <b>Наличие в Москве</b>\n\nВыберите тип запроса:",
         "category_title": "📂 Выберите категорию:",
+        "brand_title": "🏷 <b>Выберите бренд</b>\n\nНажмите бренд, чтобы посмотреть наличие:",
         "stock_title_public": "📦 <b>Москва · Аутдор — наличие</b> (общий)\n\n",
         "stock_title_vip": "⭐ <b>Москва · Аутдор — наличие</b> (VIP полный список)\n\n",
         "no_stock_public": "❌ Публичный список пуст.\n\nСвяжитесь с поддержкой:",
@@ -174,6 +177,40 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
     return f"<pre>{escape(table_text)}</pre>"
 
 
+def _other_brand_name(lang: str = "zh") -> str:
+    return {"zh": "其他", "en": "Other", "ru": "Другое"}.get(lang, "其他")
+
+
+def _ordered_brands(items: list[OutdoorItem], lang: str = "zh") -> list[str]:
+    other_brand = _other_brand_name(lang)
+    return list(dict.fromkeys((item.brand or other_brand) for item in items))
+
+
+def _filter_brand_items(items: list[OutdoorItem], brand: str, lang: str = "zh") -> list[OutdoorItem]:
+    other_brand = _other_brand_name(lang)
+    return [item for item in items if (item.brand or other_brand) == brand]
+
+
+def _brand_keyboard(items: list[OutdoorItem], lang: str, vip: bool) -> InlineKeyboardBuilder:
+    brands = _ordered_brands(items, lang)
+    builder = InlineKeyboardBuilder()
+    for idx, brand in enumerate(brands, start=1):
+        count = len(_filter_brand_items(items, brand, lang))
+        builder.row(InlineKeyboardButton(
+            text=f"🏷 {brand} ({count})",
+            callback_data=InventoryCallback(action="brand", cat_id="outdoor", vip=vip, page=idx).pack(),
+        ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "◀️ 返回品类", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️ Back"),
+        callback_data=InventoryCallback(action="categories", vip=vip).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 Main Menu"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+    return builder
+
+
 # ── 联系按钮构建（TG + WhatsApp 两个按钮）────────────────
 
 def _contact_buttons(lang: str, vip: bool, user_id: int | None = None) -> list[InlineKeyboardButton]:
@@ -228,6 +265,21 @@ async def on_public_query(callback: CallbackQuery, lang: str = "zh") -> None:
     await callback.answer()
 
 
+@router.callback_query(InventoryCallback.filter(F.action == "categories"))
+async def on_inventory_categories(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+) -> None:
+    if not callback.message:
+        return
+    await callback.message.edit_text(
+        _t(lang, "category_title"),
+        reply_markup=inventory_category_keyboard(lang, vip=callback_data.vip),
+    )
+    await callback.answer()
+
+
 @router.message(StateFilter(default_state), F.text == settings.vip_inventory_password)
 async def on_vip_password_text(message: Message, lang: str = "zh") -> None:
     """VIP 密码文本触发（无按钮，直接发密码即可进入 VIP 查询）."""
@@ -243,7 +295,7 @@ async def on_inventory_category(
     callback_data: InventoryCallback,
     lang: str = "zh",
 ) -> None:
-    """品类选择后展示库存."""
+    """品类选择后展示品牌列表."""
     if not callback.message:
         return
 
@@ -267,7 +319,6 @@ async def on_inventory_category(
         await callback.answer()
         return
 
-    title_key = "stock_title_vip" if vip else "stock_title_public"
     builder = InlineKeyboardBuilder()
 
     if not items:
@@ -289,14 +340,61 @@ async def on_inventory_category(
         await callback.answer()
         return
 
-    table_html = _format_outdoor_table(items, lang)
+    await callback.message.edit_text(
+        _t(lang, "brand_title"),
+        reply_markup=_brand_keyboard(items, lang, vip).as_markup(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "brand"))
+async def on_inventory_brand(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+) -> None:
+    """品牌选择后展示该品牌库存."""
+    if not callback.message:
+        return
+
+    vip = callback_data.vip
+
+    if not settings.outdoor_sheet_id:
+        await callback.message.edit_text(_t(lang, "not_configured"))
+        await callback.answer()
+        return
+
+    try:
+        items = await get_outdoor_inventory(vip=vip)
+    except Exception as e:
+        logger.error("get_outdoor_inventory failed: %s", e)
+        await callback.message.edit_text(_t(lang, "loading_err"))
+        await callback.answer()
+        return
+
+    brands = _ordered_brands(items, lang)
+    brand_idx = callback_data.page - 1
+    if brand_idx < 0 or brand_idx >= len(brands):
+        await callback.answer(_t(lang, "loading_err"), show_alert=True)
+        return
+
+    brand = brands[brand_idx]
+    brand_items = _filter_brand_items(items, brand, lang)
+    builder = InlineKeyboardBuilder()
+
+    if not brand_items:
+        await callback.answer(_t(lang, "loading_err"), show_alert=True)
+        return
+
+    table_html = _format_outdoor_table(brand_items, lang)
+    title_key = "stock_title_vip" if vip else "stock_title_public"
     text = _t(lang, title_key) + table_html + _t(lang, "data_delay")
 
     user_id = callback.from_user.id if callback.from_user else None
     builder.row(*_contact_buttons(lang, vip, user_id))
     builder.row(InlineKeyboardButton(
-        text={"zh": "◀️ 返回查询方式", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️ Back"),
-        callback_data=InventoryCallback(action="menu").pack(),
+        text={"zh": "◀️ 返回品牌", "en": "◀️ Brands", "ru": "◀️ Бренды"}.get(lang, "◀️ Brands"),
+        callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip).pack(),
     ))
     builder.row(InlineKeyboardButton(
         text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 Main Menu"),
