@@ -248,14 +248,10 @@ def _inventory_whatsapp_url(lang: str, vip: bool, user_id: int | None = None) ->
     if not phone:
         return settings.inventory_whatsapp_url
 
-    tag = f"\nTGID:{user_id}" if user_id else ""
     if vip:
-        text = {
-            "zh": f"你好，我需要了解航空货运服务。{tag}",
-            "en": f"Hi, I'd like to ask about air freight service.{tag}",
-            "ru": f"Здравствуйте, мне нужно узнать об авиаперевозке грузов.{tag}",
-        }.get(lang, f"Hi, air freight inquiry.{tag}")
+        text = _vip_airfreight_prefill(user_id)
     else:
+        tag = f"\nTGID:{user_id}" if user_id else ""
         text = {
             "zh": f"你好，我想咨询产品库存和购买信息。{tag}",
             "en": f"Hi, I'd like to ask about product stock and purchase information.{tag}",
@@ -265,17 +261,17 @@ def _inventory_whatsapp_url(lang: str, vip: bool, user_id: int | None = None) ->
     return f"https://wa.me/{phone}?text={urllib.parse.quote(text)}"
 
 
+def _vip_airfreight_prefill(user_id: int | None = None) -> str:
+    tag = f"，TGID:{user_id}" if user_id else ""
+    return f"你好，我需要了解航空货运服务。 户外类型{tag}"
+
+
 # ── 联系按钮构建（TG + WhatsApp 两个按钮）────────────────
 
 def _contact_buttons(lang: str, vip: bool, user_id: int | None = None) -> list[InlineKeyboardButton]:
     import urllib.parse
     if vip:
-        tag = f"请求类型：空运\nTGID:{user_id}" if user_id else "请求类型：空运"
-        prefill = {
-            "zh": f"自动携带标签\n来源：空运\n{tag}",
-            "en": f"Auto tag\nSource: Air freight\n{tag}",
-            "ru": f"Автометка\nИсточник: авиадоставка\n{tag}",
-        }.get(lang, f"Auto tag\nSource: Air freight\n{tag}")
+        prefill = _vip_airfreight_prefill(user_id)
     else:
         tag = f" (TGID:{user_id})" if user_id else ""
         prefill = {
