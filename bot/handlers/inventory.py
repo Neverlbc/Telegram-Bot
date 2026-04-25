@@ -168,7 +168,10 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
         if idx < len(items) - 1 and (items[idx + 1].brand or other_brand) == current_brand:
             rows.append(sep)
 
-    return f"<pre>{escape(chr(10).join(rows))}</pre>"
+    table_text = chr(10).join(rows)
+    if _display_width(table_text) > 3600:
+        table_text = table_text[:3600] + "\n…"
+    return f"<pre>{escape(table_text)}</pre>"
 
 
 # ── 联系按钮构建（TG + WhatsApp 两个按钮）────────────────
@@ -288,8 +291,6 @@ async def on_inventory_category(
 
     table_html = _format_outdoor_table(items, lang)
     text = _t(lang, title_key) + table_html + _t(lang, "data_delay")
-    if len(text) > 4000:
-        text = text[:3900] + "\n…"
 
     user_id = callback.from_user.id if callback.from_user else None
     builder.row(*_contact_buttons(lang, vip, user_id))
