@@ -215,14 +215,15 @@ def _brand_keyboard(items: list[OutdoorItem], lang: str, vip: bool) -> InlineKey
 
 def _contact_buttons(lang: str, vip: bool, user_id: int | None = None) -> list[InlineKeyboardButton]:
     import urllib.parse
-    tag = f" (TGID:{user_id})" if user_id else ""
     if vip:
+        tag = f"请求类型：空运\nTGID:{user_id}" if user_id else "请求类型：空运"
         prefill = {
-            "zh": f"你好，我需要预约空运{tag}",
-            "en": f"Hi, I'd like to book air freight{tag}",
-            "ru": f"Привет, хочу заказать авиадоставку{tag}",
-        }.get(lang, f"Hi, air freight inquiry{tag}")
+            "zh": f"自动携带标签\n来源：空运\n{tag}",
+            "en": f"Auto tag\nSource: Air freight\n{tag}",
+            "ru": f"Автометка\nИсточник: авиадоставка\n{tag}",
+        }.get(lang, f"Auto tag\nSource: Air freight\n{tag}")
     else:
+        tag = f" (TGID:{user_id})" if user_id else ""
         prefill = {
             "zh": f"你好，我想查询库存{tag}",
             "en": f"Hi, I'd like to check stock{tag}",
