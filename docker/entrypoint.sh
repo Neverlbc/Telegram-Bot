@@ -23,5 +23,10 @@ async def main():
 asyncio.run(main())
 " && echo "Database ready." || echo "WARNING: Database setup failed (may need manual intervention)"
 
+if [ "$#" -gt 0 ]; then
+    echo "Starting custom command: $*"
+    exec "$@"
+fi
+
 echo "Starting bot..."
-exec python -m bot "$@"
+exec python -m bot
