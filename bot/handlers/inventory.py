@@ -123,10 +123,10 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
     statuses = [i.status_text(lang) for i in items]
     notes = [i.notes or "-" for i in items]
 
-    name_w = max(_display_width(hdr[0]), min(max(_display_width(n) for n in names), 16))
+    name_w = max(_display_width(hdr[0]), min(max(_display_width(n) for n in names), 15))
     qty_w = max(_display_width(hdr[1]), max(_display_width(q) for q in qtys))
     status_w = max(_display_width(hdr[2]), max(_display_width(s) for s in statuses))
-    notes_w = max(_display_width(hdr[3]), min(max(_display_width(n) for n in notes), 10))
+    notes_w = max(_display_width(hdr[3]), min(max(_display_width(n) for n in notes), 8))
 
     header = (
         f"{_fit_cell(hdr[0], name_w)} "
@@ -134,7 +134,6 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
         f"{_fit_cell(hdr[2], status_w)} "
         f"{_fit_cell(hdr[3], notes_w)}"
     )
-    sep = "─" * min(32, name_w + qty_w + status_w + notes_w + 3)
     other_brand = {"zh": "其他", "en": "Other", "ru": "Другое"}.get(lang, "其他")
 
     rows: list[str] = []
@@ -146,7 +145,6 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
                 rows.append("")
             rows.append(f"【{brand}】")
             rows.append(header)
-            rows.append(sep)
             current_brand = brand
 
         name_lines = _wrap_cell(item.sku, name_w)
@@ -165,8 +163,6 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
                 f"{_fit_cell(sv, status_w)} "
                 f"{_fit_cell(note, notes_w)}"
             )
-        if idx < len(items) - 1 and (items[idx + 1].brand or other_brand) == current_brand:
-            rows.append(sep)
 
     table_text = chr(10).join(rows)
     if _display_width(table_text) > 3600:
