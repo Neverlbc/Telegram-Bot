@@ -134,7 +134,7 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
         f"{_fit_cell(hdr[2], status_w)} "
         f"{_fit_cell(hdr[3], notes_w)}"
     )
-    sep = "-" * 16
+    sep = "\u2500" * 20
     other_brand = {"zh": "其他", "en": "Other", "ru": "Другое"}.get(lang, "其他")
 
     rows: list[str] = []
