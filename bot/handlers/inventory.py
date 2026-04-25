@@ -134,6 +134,7 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
         f"{_fit_cell(hdr[2], status_w)} "
         f"{_fit_cell(hdr[3], notes_w)}"
     )
+    sep = "-" * 16
     other_brand = {"zh": "其他", "en": "Other", "ru": "Другое"}.get(lang, "其他")
 
     rows: list[str] = []
@@ -145,6 +146,7 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
                 rows.append("")
             rows.append(f"【{brand}】")
             rows.append(header)
+            rows.append(sep)
             current_brand = brand
 
         name_lines = _wrap_cell(item.sku, name_w)
@@ -163,6 +165,8 @@ def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
                 f"{_fit_cell(sv, status_w)} "
                 f"{_fit_cell(note, notes_w)}"
             )
+        if idx < len(items) - 1 and (items[idx + 1].brand or other_brand) == current_brand:
+            rows.append(sep)
 
     table_text = chr(10).join(rows)
     if _display_width(table_text) > 3600:
