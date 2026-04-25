@@ -81,6 +81,10 @@ class Settings(BaseSettings):
 
     # ── 人工客服 ───────────────────────────────────────
     human_agent_username: str = Field("ABFOfficialGroup", description="统一人工客服 Telegram 用户名 (不带@)")
+    vandych_agent_username: str = Field(
+        "",
+        description="Vandych 的帐篷专属客服 Telegram 用户名 (不带@)，为空时使用 human_agent_username",
+    )
     inventory_agent_username: str = Field("Sarahhappyeveryday", description="现货查询专属客服 TG 用户名 (不带@)")
     inventory_whatsapp_url: str = Field(
         "https://wa.me/8613662729512?text=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5%2C%20%D0%BC%D0%BD%D0%B5%20%D0%BD%D1%83%D0%B6%D0%BD%D0%BE%20%D1%83%D0%B7%D0%BD%D0%B0%D1%82%D1%8C%20%D0%BE%20%D1%83%D1%81%D0%BB%D1%83%D0%B3%D0%B0%D1%85%20%D0%B0%D0%B2%D0%B8%D0%B0%D0%BF%D0%B5%D1%80%D0%B5%D0%B2%D0%BE%D0%B7%D0%BE%D0%BA%20%D0%B3%D1%80%D1%83%D0%B7%D0%BE%D0%B2.",
@@ -92,6 +96,7 @@ class Settings(BaseSettings):
     aliexpress_shipping_url: str = Field(
         "https://www.aliexpress.com", description="Vandych VIP 空运支付链接"
     )
+    vandych_shipping_discount_code: str = Field("", description="Vandych 空运支付折扣码")
 
     # ── 密码入口 ──────────────────────────────────────
     vip_inventory_password: str = Field("ABFVIP2026", description="VIP 现货查询密码")
