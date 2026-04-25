@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import logging
+import os
 from dataclasses import dataclass
+from typing import Any
 
 import aiohttp
 from redis.asyncio import Redis
@@ -30,8 +33,6 @@ COL_LINK = "Links"
 COL_CODE = "discount"      # 和折扣码同列
 COL_ACTIVE = "active"      # 1/yes → 有效（可选列，缺省视为有效）
 COL_NOTES = "Notes"
-
-DISCOUNT_GID = 1376031396
 
 _redis_client: Redis | None = None
 
@@ -75,26 +76,65 @@ class DiscountItem:
         return self.format_copyable(lang)
 
 
-def _parse_csv(csv_text: str) -> list[DiscountItem]:
+def _row_value(row: dict[str, Any], *keys: str) -> str:
+    normalized = {str(key).strip().casefold(): value for key, value in row.items()}
+    for key in keys:
+        value = row.get(key)
+        if value is not None:
+            return str(value).strip()
+        value = normalized.get(key.strip().casefold())
+        if value is not None:
+            return str(value).strip()
+    return ""
+
+
+def _parse_rows(rows: list[dict[str, Any]]) -> list[DiscountItem]:
     items: list[DiscountItem] = []
-    reader = csv.DictReader(io.StringIO(csv_text))
-    for row in reader:
-        model = row.get(COL_MODEL, "").strip()
+    for row in rows:
+        model = _row_value(row, COL_MODEL, "sku", "model", "型号", "产品编码")
         if not model:
             continue
-        raw_active = str(row.get(COL_ACTIVE, "1")).strip().lower()
-        active = raw_active in ("1", "yes", "true", "是", "有效", "y")
+        raw_active = _row_value(row, COL_ACTIVE, "active", "是否有效", "有效") or "1"
+        active = raw_active.casefold() in ("1", "yes", "true", "是", "有效", "y")
         if not active:
             continue
         items.append(DiscountItem(
             model=model,
-            discount=row.get(COL_DISCOUNT, "").strip(),
-            link=row.get(COL_LINK, "").strip(),
-            code=row.get(COL_CODE, "").strip(),
+            discount=_row_value(row, COL_DISCOUNT, "discount", "折扣", "折扣码"),
+            link=_row_value(row, COL_LINK, "links", "link", "链接"),
+            code=_row_value(row, COL_CODE, "code", "discount", "折扣码"),
             active=active,
-            notes=row.get(COL_NOTES, "").strip(),
+            notes=_row_value(row, COL_NOTES, "notes", "备注", "说明"),
         ))
     return items
+
+
+def _parse_csv(csv_text: str) -> list[DiscountItem]:
+    reader = csv.DictReader(io.StringIO(csv_text))
+    return _parse_rows(list(reader))
+
+
+def _get_gspread_client() -> Any:
+    import gspread
+    from google.oauth2.service_account import Credentials
+
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/drive.readonly",
+    ]
+    creds = Credentials.from_service_account_file(settings.google_credentials_file, scopes=scopes)
+    return gspread.authorize(creds)
+
+
+def _fetch_discount_rows_sync() -> list[dict[str, Any]]:
+    gc = _get_gspread_client()
+    spreadsheet = gc.open_by_key(settings.discount_sheet_id)
+    gid = settings.discount_sheet_gid
+    worksheet = next((ws for ws in spreadsheet.worksheets() if ws.id == gid), None)
+    if worksheet is None:
+        logger.warning("Discount worksheet gid=%s not found; using first worksheet", gid)
+        worksheet = spreadsheet.sheet1
+    return worksheet.get_all_records()
 
 
 async def get_discounts() -> list[DiscountItem]:
@@ -104,7 +144,8 @@ async def get_discounts() -> list[DiscountItem]:
         logger.warning("discount_sheet_id not configured")
         return []
 
-    cache_key = "discount_items"
+    gid = settings.discount_sheet_gid
+    cache_key = f"discount_items:{sheet_id}:{gid}"
     redis = _get_redis()
 
     if redis is not None:
@@ -112,24 +153,33 @@ async def get_discounts() -> list[DiscountItem]:
             cached = await redis.get(cache_key)
             if cached:
                 return _parse_csv(cached)
-        except Exception as e:
-            logger.warning("Redis read failed: %s", e)
+        except Exception as exc:
+            logger.warning("Redis read failed: %s", exc)
 
-    url = SHEETS_CSV_URL.format(sheet_id=sheet_id, gid=DISCOUNT_GID)
+    creds_file = settings.google_credentials_file
+    if creds_file and os.path.isfile(creds_file):
+        try:
+            rows = await asyncio.to_thread(_fetch_discount_rows_sync)
+            items = _parse_rows(rows)
+            return items
+        except Exception as exc:
+            logger.warning("Failed to fetch discount sheet via service account: %s", exc)
+
+    url = SHEETS_CSV_URL.format(sheet_id=sheet_id, gid=gid)
     try:
-        async with aiohttp.ClientSession() as http:
+        async with aiohttp.ClientSession(trust_env=True) as http:
             async with http.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 resp.raise_for_status()
                 csv_text = await resp.text(encoding="utf-8")
-    except Exception as e:
-        logger.error("Failed to fetch discount sheet: %s", e)
+    except Exception as exc:
+        logger.error("Failed to fetch discount sheet: %s", exc)
         return []
 
     if redis is not None:
         try:
             await redis.set(cache_key, csv_text, ex=CACHE_TTL)
-        except Exception as e:
-            logger.warning("Redis write failed: %s", e)
+        except Exception as exc:
+            logger.warning("Redis write failed: %s", exc)
 
     return _parse_csv(csv_text)
 

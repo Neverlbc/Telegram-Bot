@@ -111,6 +111,7 @@ class Settings(BaseSettings):
     outdoor_sheet_id: str = Field("", description="莫斯科户外现货 Google Sheet ID")
     service_center_sheet_id: str = Field("", description="服务中心检修 Google Sheet ID")
     discount_sheet_id: str = Field("", description="促销折扣 Google Sheet ID")
+    discount_sheet_gid: int = Field(1376031396, description="促销折扣 Google Sheet tab GID")
     outdoor_sku_aliases: str = Field(
         "",
         description=(

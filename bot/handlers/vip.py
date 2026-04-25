@@ -37,6 +37,7 @@ TEXTS: dict[str, dict[str, str]] = {
         ),
         "discount_title": "🎁 <b>促销折扣</b>\n\n当前有效折扣：\n\n",
         "discount_empty": "📭 当前暂无促销折扣。",
+        "discount_not_configured": "⚠️ 促销折扣表暂未配置，请联系客服。",
         "discount_note": "\n\n⚠️ <i>提示：以上折扣仅本次促销有效</i>",
         "shipping_text": "✈️ <b>空运支付</b>\n\n请通过以下链接完成空运费用支付：",
         "shipping_code": "\n\n🎟 <b>折扣码：</b><code>{code}</code>",
@@ -56,6 +57,7 @@ TEXTS: dict[str, dict[str, str]] = {
         ),
         "discount_title": "🎁 <b>Promotions</b>\n\nActive discounts:\n\n",
         "discount_empty": "📭 No active promotions at the moment.",
+        "discount_not_configured": "⚠️ Promotion sheet is not configured. Please contact support.",
         "discount_note": "\n\n⚠️ <i>Note: Discounts are valid for this promotion only</i>",
         "shipping_text": "✈️ <b>Air Freight Payment</b>\n\nPay via the link below:",
         "shipping_code": "\n\n🎟 <b>Discount code:</b><code>{code}</code>",
@@ -75,6 +77,7 @@ TEXTS: dict[str, dict[str, str]] = {
         ),
         "discount_title": "🎁 <b>Акции</b>\n\nАктивные скидки:\n\n",
         "discount_empty": "📭 Нет активных акций.",
+        "discount_not_configured": "⚠️ Таблица акций не настроена. Свяжитесь с поддержкой.",
         "discount_note": "\n\n⚠️ <i>Скидки действуют только в рамках текущей акции</i>",
         "shipping_text": "✈️ <b>Оплата авиадоставки</b>\n\nОплатите по ссылке ниже:",
         "shipping_code": "\n\n🎟 <b>Промокод:</b><code>{code}</code>",
@@ -135,6 +138,19 @@ def _shipping_payment_url() -> str:
 def _airfreight_prefill(user_id: int | None) -> str:
     tag = f"，TGID:{user_id}" if user_id else ""
     return f"你好，我需要了解航空货运服务。来源：Vandych的帐篷{tag}"
+
+
+def _vip_nav_builder(lang: str, back_action: str = "menu") -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text={"zh": "◀️ 返回", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️"),
+        callback_data=VipCallback(action=back_action).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+    return builder
 
 
 def _is_vandych_password(text: str | None) -> bool:
@@ -243,22 +259,18 @@ async def on_vip_discount(callback: CallbackQuery, lang: str = "zh") -> None:
     """展示 SKU 列表按钮，供用户选择."""
     if not callback.message:
         return
-    try:
-        items = await get_discounts()
-    except Exception as e:
-        logger.error("get_discounts failed: %s", e)
-        await callback.answer(_t(lang, "loading_err"), show_alert=True)
+    nav = _vip_nav_builder(lang)
+    if not settings.discount_sheet_id:
+        await callback.message.edit_text(_t(lang, "discount_not_configured"), reply_markup=nav.as_markup())
+        await callback.answer()
         return
 
-    nav = InlineKeyboardBuilder()
-    nav.row(InlineKeyboardButton(
-        text={"zh": "◀️ 返回", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️"),
-        callback_data=VipCallback(action="menu").pack(),
-    ))
-    nav.row(InlineKeyboardButton(
-        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠"),
-        callback_data=NavCallback(action="home").pack(),
-    ))
+    try:
+        items = await get_discounts()
+    except Exception as exc:
+        logger.error("get_discounts failed: %s", exc)
+        await callback.answer(_t(lang, "loading_err"), show_alert=True)
+        return
 
     if not items:
         await callback.message.edit_text(_t(lang, "discount_empty"), reply_markup=nav.as_markup())
@@ -277,8 +289,14 @@ async def on_vip_discount(callback: CallbackQuery, lang: str = "zh") -> None:
             text=f"🏷 {item.model}",
             callback_data=VipCallback(action="sku_select", sku_idx=idx).pack(),
         ))
-    for btn_row in nav.buttons:
-        builder.row(*btn_row)
+    builder.row(InlineKeyboardButton(
+        text={"zh": "◀️ 返回", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️"),
+        callback_data=VipCallback(action="menu").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
 
     await callback.message.edit_text(title, reply_markup=builder.as_markup())
     await callback.answer()
@@ -293,10 +311,14 @@ async def on_sku_select(
     """用户点击 SKU 按钮后，发送可复制的折扣信息."""
     if not callback.message:
         return
+    if not settings.discount_sheet_id:
+        await callback.answer(_t(lang, "discount_not_configured"), show_alert=True)
+        return
+
     try:
         items = await get_discounts()
-    except Exception as e:
-        logger.error("get_discounts failed: %s", e)
+    except Exception as exc:
+        logger.error("get_discounts failed: %s", exc)
         await callback.answer(_t(lang, "loading_err"), show_alert=True)
         return
 
