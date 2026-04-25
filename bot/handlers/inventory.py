@@ -108,41 +108,64 @@ def _wrap_cell(value: str, width: int) -> list[str]:
 
 
 def _format_outdoor_table(items: list[OutdoorItem], lang: str) -> str:
-    """生成户外库存表格 HTML（<pre> 包裹）."""
+    """生成按品牌分组的户外库存表格 HTML（<pre> 包裹）."""
     if not items:
         return ""
 
     hdr = {
-        "zh": ("型号", "数量", "状态"),
-        "en": ("Model", "Qty", "Status"),
-        "ru": ("Модель", "Кол-во", "Статус"),
-    }.get(lang, ("型号", "数量", "状态"))
+        "zh": ("SKU", "QTYS", "状态", "备注"),
+        "en": ("SKU", "QTYS", "Status", "Notes"),
+        "ru": ("SKU", "QTYS", "Статус", "Примеч."),
+    }.get(lang, ("SKU", "QTYS", "状态", "备注"))
 
     names = [i.sku for i in items]
     qtys = [str(i.qty) for i in items]
     statuses = [i.status_text(lang) for i in items]
+    notes = [i.notes or "-" for i in items]
 
-    name_w = max(_display_width(hdr[0]), min(max(_display_width(n) for n in names), 14))
+    name_w = max(_display_width(hdr[0]), min(max(_display_width(n) for n in names), 18))
     qty_w = max(_display_width(hdr[1]), max(_display_width(q) for q in qtys))
     status_w = max(_display_width(hdr[2]), max(_display_width(s) for s in statuses))
+    notes_w = max(_display_width(hdr[3]), min(max(_display_width(n) for n in notes), 14))
 
-    header = f"{_fit_cell(hdr[0], name_w)} {_right_cell(hdr[1], qty_w)} {_fit_cell(hdr[2], status_w)}"
-    sep = "─" * (name_w + qty_w + status_w + 2)
+    header = (
+        f"{_fit_cell(hdr[0], name_w)} "
+        f"{_right_cell(hdr[1], qty_w)} "
+        f"{_fit_cell(hdr[2], status_w)} "
+        f"{_fit_cell(hdr[3], notes_w)}"
+    )
+    sep = "─" * (name_w + qty_w + status_w + notes_w + 3)
+    other_brand = {"zh": "其他", "en": "Other", "ru": "Другое"}.get(lang, "其他")
 
-    rows = [header]
+    rows: list[str] = []
+    current_brand: str | None = None
     for idx, item in enumerate(items):
+        brand = item.brand or other_brand
+        if brand != current_brand:
+            if rows:
+                rows.append("")
+            rows.append(f"【{brand}】")
+            rows.append(header)
+            rows.append(sep)
+            current_brand = brand
+
         name_lines = _wrap_cell(item.sku, name_w)
         qty_lines = _wrap_cell(str(item.qty), qty_w)
         status_lines = _wrap_cell(item.status_text(lang), status_w)
-        h = max(len(name_lines), len(qty_lines), len(status_lines))
+        note_lines = _wrap_cell(item.notes or "-", notes_w)
+        h = max(len(name_lines), len(qty_lines), len(status_lines), len(note_lines))
         for i in range(h):
             nv = name_lines[i] if i < len(name_lines) else ""
             qv = qty_lines[i] if i < len(qty_lines) else ""
             sv = status_lines[i] if i < len(status_lines) else ""
-            rows.append(f"{_fit_cell(nv, name_w)} {_right_cell(qv, qty_w)} {_fit_cell(sv, status_w)}")
-        if item.notes:
-            rows.append(f"  📝 {item.notes}")
-        if idx < len(items) - 1:
+            note = note_lines[i] if i < len(note_lines) else ""
+            rows.append(
+                f"{_fit_cell(nv, name_w)} "
+                f"{_right_cell(qv, qty_w)} "
+                f"{_fit_cell(sv, status_w)} "
+                f"{_fit_cell(note, notes_w)}"
+            )
+        if idx < len(items) - 1 and (items[idx + 1].brand or other_brand) == current_brand:
             rows.append(sep)
 
     return f"<pre>{escape(chr(10).join(rows))}</pre>"

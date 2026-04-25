@@ -136,7 +136,8 @@ async def sync_sheet(sheet_key: str) -> SyncResult:
                           jst_found=0, kyb_found=0, error="Outdoor Sheets 无 SKU 行")
 
     aliases = _get_sku_alias_map()
-    sheet_skus = list(dict.fromkeys(row.sku for row in rows))
+    product_rows = [row for row in rows if not row.is_brand_header]
+    sheet_skus = list(dict.fromkeys(row.sku for row in product_rows))
     jst_sku_list = _unique([sku for sheet_sku in sheet_skus for sku in _source_skus(sheet_sku, "jst", aliases)])
     kyb_sku_list = _unique([sku for sheet_sku in sheet_skus for sku in _source_skus(sheet_sku, "kyb", aliases)])
     logger.info("[Sync] %s: %d 个表格 SKU，JST 查询 %d 个，KYB 查询 %d 个",
@@ -162,13 +163,7 @@ async def sync_sheet(sheet_key: str) -> SyncResult:
     # ── 3. 计算 QTYS ─────────────────────────────────────
     # 公式：QTYS = KYB tocUsableQty - 聚水潭 order_lock（订单占有数）
     updates: dict[str, SheetRowUpdate] = {}
-    for row in rows:
-        found_in_sources = (
-            _found_in_source(kyb_map, row.sku, "kyb", aliases)
-            or _found_in_source(jst_map, row.sku, "jst", aliases)
-        )
-        if not found_in_sources and not row.has_existing_qty:
-            continue
+    for row in product_rows:
         kyb_usable = _sum_source_qty(kyb_map, row.sku, "kyb", aliases)
         jst_order_lock = _sum_source_qty(jst_map, row.sku, "jst", aliases)
         net = max(0, kyb_usable - jst_order_lock)

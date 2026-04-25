@@ -10,10 +10,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import logging
+import os
+import re
 from dataclasses import dataclass
+from typing import Any
 
 import aiohttp
 from redis.asyncio import Redis
@@ -51,6 +55,8 @@ OUTDOOR_SHEET_CONFIG: dict[str, dict[str, str | int | bool]] = {
     },
 }
 
+_DIGIT_RE = re.compile(r"\d")
+
 _redis_client: Redis | None = None
 
 
@@ -67,6 +73,7 @@ class OutdoorItem:
     qty: int
     state: str = ""   # Sheet 中 State 列原始值
     notes: str = ""
+    brand: str = ""
 
     @property
     def is_available(self) -> bool:
@@ -88,10 +95,29 @@ class OutdoorSyncRow:
     qty_text: str = ""
     state: str = ""
     notes: str = ""
+    brand_header: bool = False
+    merge_metadata_known: bool = False
 
     @property
     def has_existing_qty(self) -> bool:
         return bool(self.qty_text.strip())
+
+    @property
+    def is_brand_header(self) -> bool:
+        if self.merge_metadata_known:
+            return self.brand_header
+        return _is_brand_header(self.sku, self.qty_text, self.state, self.notes)
+
+
+def _is_brand_header(sku: str, qty_text: str = "", state: str = "", notes: str = "") -> bool:
+    """识别 CSV 中的品牌表头行.
+
+    Google CSV 不包含行背景/字体样式，无法直接读取黑底或黄底品牌行。
+    当前表格约定品牌行只有 SKU 列有值，且品牌名通常不含数字；
+    产品编码通常包含数字或已有 QTYS/State/Notes。
+    """
+    sku = sku.strip()
+    return bool(sku and not qty_text.strip() and not state.strip() and not notes.strip() and not _DIGIT_RE.search(sku))
 
 
 async def _fetch_outdoor_csv(gid: int) -> str:
@@ -106,21 +132,22 @@ async def _fetch_outdoor_csv(gid: int) -> str:
 def _parse_csv(csv_text: str) -> list[OutdoorItem]:
     items: list[OutdoorItem] = []
     reader = csv.DictReader(io.StringIO(csv_text))
+    current_brand = ""
     for row in reader:
         sku = row.get(COL_SKU, "").strip()
         if not sku:
             continue
         qty_str = row.get(COL_QTY, "").strip()
-        if not qty_str:
-            # QTYS 为空 → 品牌标题行，跳过
-            continue
-        try:
-            qty = int(qty_str)
-        except ValueError:
-            qty = 0
         state = row.get(COL_STATE, "").strip()
         notes = row.get(COL_NOTES, "").strip()
-        items.append(OutdoorItem(sku=sku, qty=qty, state=state, notes=notes))
+        if _is_brand_header(sku, qty_str, state, notes):
+            current_brand = sku
+            continue
+        try:
+            qty = int(qty_str or "0")
+        except ValueError:
+            qty = 0
+        items.append(OutdoorItem(sku=sku, qty=qty, state=state, notes=notes, brand=current_brand))
     return items
 
 
@@ -137,6 +164,73 @@ def _parse_sync_rows(csv_text: str) -> list[OutdoorSyncRow]:
                 qty_text=row.get(COL_QTY, "").strip(),
                 state=row.get(COL_STATE, "").strip(),
                 notes=row.get(COL_NOTES, "").strip(),
+            )
+        )
+    return rows
+
+
+def _get_gspread_client() -> Any:
+    import gspread
+    from google.oauth2.service_account import Credentials
+
+    creds_file = settings.google_credentials_file
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.readonly",
+    ]
+    creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
+    return gspread.authorize(creds)
+
+
+def _fetch_sync_rows_with_merges_sync(gid: int) -> list[OutdoorSyncRow]:
+    """通过 Sheets API 读取行和合并单元格信息，用 A:D 合并识别品牌表头."""
+    if not settings.outdoor_sheet_id:
+        return []
+
+    gc = _get_gspread_client()
+    spreadsheet = gc.open_by_key(settings.outdoor_sheet_id)
+
+    worksheet: Any = None
+    for ws in spreadsheet.worksheets():
+        if ws.id == gid:
+            worksheet = ws
+            break
+    if worksheet is None:
+        return []
+
+    metadata = spreadsheet.fetch_sheet_metadata(params={"includeGridData": "false"})
+    sheet_meta = next(
+        (
+            sheet
+            for sheet in metadata.get("sheets", [])
+            if int(sheet.get("properties", {}).get("sheetId", -1)) == gid
+        ),
+        {},
+    )
+    header_rows: set[int] = set()
+    for merge in sheet_meta.get("merges", []):
+        start_row = int(merge.get("startRowIndex", 0))
+        end_row = int(merge.get("endRowIndex", 0))
+        start_col = int(merge.get("startColumnIndex", 0))
+        end_col = int(merge.get("endColumnIndex", 0))
+        if start_col == 0 and end_col >= 4 and end_row == start_row + 1:
+            header_rows.add(start_row + 1)
+
+    values: list[list[str]] = worksheet.get_all_values()
+    rows: list[OutdoorSyncRow] = []
+    for row_number, values_row in enumerate(values[1:], start=2):
+        padded = [*values_row, "", "", "", ""]
+        sku = padded[0].strip()
+        if not sku:
+            continue
+        rows.append(
+            OutdoorSyncRow(
+                sku=sku,
+                qty_text=padded[1].strip(),
+                state=padded[2].strip(),
+                notes=padded[3].strip(),
+                brand_header=row_number in header_rows,
+                merge_metadata_known=True,
             )
         )
     return rows
@@ -196,6 +290,15 @@ async def get_outdoor_sync_rows(sheet_key: str) -> list[OutdoorSyncRow]:
         return []
 
     gid = int(config["gid"])
+    creds_file = settings.google_credentials_file
+    if creds_file and os.path.isfile(creds_file):
+        try:
+            rows = await asyncio.to_thread(_fetch_sync_rows_with_merges_sync, gid)
+            if rows:
+                return rows
+        except Exception as e:
+            logger.warning("Failed to fetch outdoor sync rows with merge metadata %s (gid=%d): %r", sheet_key, gid, e)
+
     try:
         csv_text = await _fetch_outdoor_csv(gid)
     except Exception as e:
