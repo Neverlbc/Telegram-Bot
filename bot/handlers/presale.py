@@ -396,14 +396,16 @@ async def _show_inventory(
         callback_data=NavCallback(action="home").pack(),
     ))
 
-    if not items:
+    available_items = [item for item in items if item.qty > 0]
+
+    if not available_items:
         await callback.message.edit_text(  # type: ignore[union-attr]
             t(lang, "inventory_empty").format(name=name),
             reply_markup=builder.as_markup(),
         )
         return
 
-    inventory_list = _format_inventory_list(items, lang)
+    inventory_list = _format_inventory_list(available_items, lang)
     
     text = t(lang, "inventory_title").format(
         name=name,

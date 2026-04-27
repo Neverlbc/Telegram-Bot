@@ -1,11 +1,11 @@
 """库存同步编排服务.
 
-核心公式：QTYS = 聚水潭主仓实际库存(qty) - 跨运宝 tocUsableQty
+核心公式：QTYS = 跨运宝 tocUsableQty - 聚水潭订单占有数(order_lock)
 
 执行步骤（每个 sheet_key 独立执行）：
   1. 从 Google Sheets 读取当前所有 SKU
-  2. 并发查询聚水潭 + 跨运宝
-  3. 计算 QTYS = jst_qty - kyb_qty（最小为 0）
+  2. 按 SKU 映射分别用聚水潭编码和跨运宝编码并发查询
+  3. 计算 QTYS = kyb_qty - jst_order_lock（最小为 0）
   4. 将 QTYS 批量写回 Google Sheets
   5. 清除 Redis 库存缓存（让 Bot 下次读到最新数据）
 
@@ -22,8 +22,21 @@ from dataclasses import dataclass
 
 from bot.services.jushuitan import jushuitan_client
 from bot.services.kuayunbao import kuayunbao_client
-from bot.services.sheets import CACHE_TTL, SHEET_CONFIG, get_inventory, get_redis_client
+from bot.services.sheets import (
+    SHEET_CONFIG,
+    get_inventory,
+    get_redis_client,
+    is_internal_sheet,
+    notes_for_stock,
+    state_for_stock,
+)
 from bot.services.sheets_writer import write_qtys_to_sheet
+from bot.services.sku_mapping import (
+    get_stock_qty,
+    has_stock_record,
+    resolve_skus,
+    service_query_skus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +80,19 @@ async def sync_sheet(sheet_key: str) -> SyncResult:
         return SyncResult(sheet_key=sheet_key, total_skus=0, updated_rows=0,
                           jst_found=0, kyb_found=0, error="Sheets 无数据")
 
+    internal_sheet = is_internal_sheet(sheet_key)
     sku_list = [item.sku for item in items]
+    sku_lookups = resolve_skus(sku_list)
+    jst_query_skus = service_query_skus(sku_lookups.values(), "jst")
+    kyb_query_skus = service_query_skus(sku_lookups.values(), "kyb")
+    mapped_count = sum(1 for lookup in sku_lookups.values() if lookup.is_mapped)
     logger.info("[Sync] %s: %d 个 SKU", sheet_key, len(sku_list))
+    if mapped_count:
+        logger.info("[Sync] %s: 命中 SKU 映射 %d 个", sheet_key, mapped_count)
 
     # ── 2. 并发查询聚水潭 + 跨运宝 ────────────────────────
-    jst_task = asyncio.create_task(jushuitan_client.get_stock_map(sku_list))
-    kyb_task = asyncio.create_task(kuayunbao_client.get_stock_map(sku_list))
+    jst_task = asyncio.create_task(jushuitan_client.get_stock_map(jst_query_skus))
+    kyb_task = asyncio.create_task(kuayunbao_client.get_stock_map(kyb_query_skus))
     jst_map, kyb_map = await asyncio.gather(jst_task, kyb_task, return_exceptions=False)
 
     if isinstance(jst_map, Exception):
@@ -82,23 +102,34 @@ async def sync_sheet(sheet_key: str) -> SyncResult:
         logger.error("[Sync] 跨运宝查询失败: %s", kyb_map)
         kyb_map = {}
 
-    jst_found = sum(1 for sku in sku_list if sku in jst_map)
-    kyb_found = sum(1 for sku in sku_list if sku in kyb_map)
+    jst_found = sum(1 for lookup in sku_lookups.values() if has_stock_record(jst_map, lookup.jst_skus))
+    kyb_found = sum(1 for lookup in sku_lookups.values() if has_stock_record(kyb_map, lookup.kyb_skus))
     logger.info("[Sync] %s: 聚水潭 %d/%d，跨运宝 %d/%d",
                 sheet_key, jst_found, len(sku_list), kyb_found, len(sku_list))
 
     # ── 3. 计算 QTYS ─────────────────────────────────────
     # 公式：QTYS = KYB tocUsableQty - 聚水潭 order_lock（订单占有数）
     updates: dict[str, int] = {}
+    state_updates: dict[str, str] = {}
+    note_updates: dict[str, str] = {}
     for item in items:
-        kyb_usable = kyb_map.get(item.sku, 0)
-        jst_order_lock = jst_map.get(item.sku, 0)
+        lookup = sku_lookups[item.sku]
+        kyb_usable = get_stock_qty(kyb_map, lookup.kyb_skus)
+        jst_order_lock = get_stock_qty(jst_map, lookup.jst_skus)
         net = max(0, kyb_usable - jst_order_lock)
         updates[item.sku] = net
+        if not internal_sheet:
+            state_updates[item.sku] = state_for_stock(net)
+            note_updates[item.sku] = notes_for_stock(net, item.notes)
 
     # ── 4. 写回 Sheets ────────────────────────────────────
     try:
-        updated_rows = await write_qtys_to_sheet(sheet_key, updates)
+        updated_rows = await write_qtys_to_sheet(
+            sheet_key,
+            updates,
+            state_updates if not internal_sheet else None,
+            note_updates if not internal_sheet else None,
+        )
     except Exception as e:
         logger.error("[Sync] 写 Sheets 失败 %s: %s", sheet_key, e)
         return SyncResult(sheet_key=sheet_key, total_skus=len(sku_list),

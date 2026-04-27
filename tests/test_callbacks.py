@@ -37,7 +37,7 @@ def test_presale_callback_defaults() -> None:
     from bot.keyboards.callbacks import PresaleCallback
 
     cb = PresaleCallback(action="catalog")
-    assert cb.category_id == 0
+    assert cb.cat_id == ""
     assert cb.page == 1
 
 

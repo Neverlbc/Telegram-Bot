@@ -1,7 +1,8 @@
 """Google Sheets 写入服务.
 
-使用 gspread + Service Account 将计算好的 QTYS 写回 Google Sheets。
-表格列结构（固定）：SKU | QTYS | state | Notes
+使用 gspread + Service Account 将计算好的库存写回 Google Sheets。
+Bot 展示表结构：SKU | QTYS | state | Notes
+内部同步表结构：SKU | QTYS | 在途库存（只回填 QTYS）
 """
 
 from __future__ import annotations
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 # QTYS 列的字母（B 列，即第 2 列）
 QTYS_COL = 2
+STATE_COL = 3
+NOTES_COL = 4
 HEADER_ROW = 1  # 第 1 行是表头，数据从第 2 行开始
 
 
@@ -44,10 +47,17 @@ def _get_gspread_client() -> Any:
     return gspread.authorize(creds)
 
 
-def _write_qtys_sync(sheet_key: str, updates: dict[str, int]) -> int:
+def _write_qtys_sync(
+    sheet_key: str,
+    updates: dict[str, int],
+    state_updates: dict[str, str] | None = None,
+    note_updates: dict[str, str] | None = None,
+) -> int:
     """同步写入 QTYS 到 Google Sheets，返回更新行数.
 
     updates: {sku: new_qty}
+    state_updates: {sku: state}，公开 Bot 表写入 C 列。
+    note_updates: {sku: note}，公开 Bot 表写入 D 列。
     只更新已存在的 SKU 行，不增减行。
     """
     if not updates:
@@ -89,18 +99,29 @@ def _write_qtys_sync(sheet_key: str, updates: dict[str, int]) -> int:
             continue
         sku = row[0].strip() if row else ""
         if sku in updates:
-            cell = gspread.Cell(row=row_idx, col=QTYS_COL, value=updates[sku])
-            batch_updates.append(cell)
+            batch_updates.append(gspread.Cell(row=row_idx, col=QTYS_COL, value=updates[sku]))
+            if state_updates is not None:
+                batch_updates.append(gspread.Cell(row=row_idx, col=STATE_COL, value=state_updates.get(sku, "")))
+            if note_updates is not None:
+                batch_updates.append(gspread.Cell(row=row_idx, col=NOTES_COL, value=note_updates.get(sku, "")))
             updated += 1
 
     if batch_updates:
         worksheet.update_cells(batch_updates, value_input_option="USER_ENTERED")
-        logger.info("[SheetsWriter] %s: 更新 %d 行 QTYS", sheet_key, updated)
+        columns = "QTYS"
+        if state_updates is not None or note_updates is not None:
+            columns = "QTYS/State/Notes"
+        logger.info("[SheetsWriter] %s: 更新 %d 行 %s", sheet_key, updated, columns)
 
     return updated
 
 
-async def write_qtys_to_sheet(sheet_key: str, updates: dict[str, int]) -> int:
+async def write_qtys_to_sheet(
+    sheet_key: str,
+    updates: dict[str, int],
+    state_updates: dict[str, str] | None = None,
+    note_updates: dict[str, str] | None = None,
+) -> int:
     """异步写入 QTYS，在线程池中执行 gspread 同步操作."""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _write_qtys_sync, sheet_key, updates)
+    return await loop.run_in_executor(None, _write_qtys_sync, sheet_key, updates, state_updates, note_updates)

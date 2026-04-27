@@ -12,7 +12,7 @@ def test_parse_admin_ids_from_string() -> None:
 
     with patch.dict(os.environ, {"BOT_TOKEN": "test:token", "ADMIN_IDS": "123,456,789"}):
         s = Settings()  # type: ignore[call-arg]
-        assert s.admin_ids == [123, 456, 789]
+        assert s.admin_id_list == [123, 456, 789]
 
 
 def test_parse_admin_ids_empty() -> None:
@@ -21,7 +21,7 @@ def test_parse_admin_ids_empty() -> None:
 
     with patch.dict(os.environ, {"BOT_TOKEN": "test:token", "ADMIN_IDS": ""}):
         s = Settings()  # type: ignore[call-arg]
-        assert s.admin_ids == []
+        assert s.admin_id_list == []
 
 
 def test_database_url() -> None:
