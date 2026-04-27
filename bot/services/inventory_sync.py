@@ -34,12 +34,16 @@ AUTO_MANAGED_NOTE_TEXTS = {
     "none",
     "null",
     "n/a",
+    "在途",
     "在途中",
     "正在运输途中",
     "in transit",
     "в пути",
     "для получения более подробной информации, пожалуйста, свяжитесь со службой поддержки клиентов",
 }
+
+OUT_OF_STOCK_STATE = "None"
+OUT_OF_STOCK_NOTE = "Для получения более подробной информации, пожалуйста, свяжитесь со службой поддержки клиентов."
 
 
 @dataclass
@@ -133,11 +137,17 @@ def _is_auto_managed_note(note: str) -> bool:
 
 
 def _next_note(qty: int, current_note: str) -> str:
-    if not _is_auto_managed_note(current_note):
-        return current_note
-    if qty > 0:
+    if qty <= 0:
+        return OUT_OF_STOCK_NOTE
+    if _is_auto_managed_note(current_note):
         return ""
-    return "在途中"
+    return current_note
+
+
+def _next_state(qty: int) -> str:
+    if qty > 0:
+        return "有货"
+    return OUT_OF_STOCK_STATE
 
 
 async def sync_sheet(sheet_key: str) -> SyncResult:
@@ -184,7 +194,7 @@ async def sync_sheet(sheet_key: str) -> SyncResult:
         net = max(0, kyb_usable - jst_order_lock)
         updates[row.sku] = SheetRowUpdate(
             qty=net,
-            state="有货" if net > 0 else "缺货",
+            state=_next_state(net),
             notes=_next_note(net, row.notes),
         )
 

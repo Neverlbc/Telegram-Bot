@@ -90,6 +90,8 @@ _EMPTY_NOTE_LABELS = {
     "для получения более подробной информации, пожалуйста, свяжитесь со службой поддержки клиентов",
 }
 
+_EMPTY_STATE_LABELS = {"", "-", "—", "none", "null", "n/a"}
+
 
 def _get_redis() -> Redis | None:
     global _redis_client
@@ -111,7 +113,7 @@ class OutdoorItem:
         return self.qty > 0
 
     def status_text(self, lang: str = "zh") -> str:
-        if self.state:
+        if self.state and _normalize_label(self.state) not in _EMPTY_STATE_LABELS:
             label = _localized_label(self.state, _STATE_LABELS, lang)
             return label or self.state
         if self.is_available:

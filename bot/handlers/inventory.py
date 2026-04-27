@@ -238,8 +238,12 @@ def _filter_brand_items(items: list[OutdoorItem], brand: str, lang: str = "zh") 
     return [item for item in items if (item.brand or other_brand) == brand]
 
 
+def _stock_first(items: list[OutdoorItem]) -> list[OutdoorItem]:
+    return sorted(items, key=lambda item: not item.is_available)
+
+
 def _available_items(items: list[OutdoorItem]) -> list[OutdoorItem]:
-    return [item for item in items if item.qty > 0]
+    return _stock_first([item for item in items if item.qty > 0])
 
 
 def _brand_keyboard(items: list[OutdoorItem], lang: str, vip: bool) -> InlineKeyboardBuilder:
@@ -465,7 +469,7 @@ async def on_inventory_brand(
         return
 
     brand = brands[brand_idx]
-    brand_items = _filter_brand_items(items, brand, lang)
+    brand_items = _stock_first(_filter_brand_items(items, brand, lang))
     builder = InlineKeyboardBuilder()
 
     if not brand_items:
