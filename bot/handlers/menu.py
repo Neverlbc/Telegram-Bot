@@ -11,7 +11,13 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.config import settings
 from bot.keyboards.callbacks import MenuCallback, NavCallback
-from bot.keyboards.inline import main_menu_keyboard, settings_menu_keyboard
+from bot.keyboards.inline import inventory_category_keyboard, inventory_menu_keyboard, main_menu_keyboard, settings_menu_keyboard
+from bot.services.hidden_access import (
+    MENU_SERVICE_ADMIN,
+    MENU_VIP_INVENTORY,
+    clear_state_keep_hidden_access,
+    has_hidden_access,
+)
 
 logger = logging.getLogger(__name__)
 router = Router(name="menu")
@@ -49,6 +55,14 @@ SETTINGS_TITLES = {
 
 def _menu_text(lang: str) -> str:
     return MENU_TITLES.get(lang, MENU_TITLES["zh"])
+
+
+def _expired_text(lang: str) -> str:
+    return {
+        "zh": "🔐 隐藏菜单访问已过期，请重新输入访问码。",
+        "en": "🔐 Hidden menu access has expired. Please enter the access code again.",
+        "ru": "🔐 Доступ к скрытому меню истёк. Введите код доступа ещё раз.",
+    }.get(lang, "🔐 隐藏菜单访问已过期，请重新输入访问码。")
 
 
 @router.message(Command("menu"))
@@ -141,10 +155,34 @@ async def on_nav_back(
             SETTINGS_TITLES.get(lang, SETTINGS_TITLES["zh"]),
             reply_markup=settings_menu_keyboard(lang),
         )
+    elif target == "inv_public":
+        from bot.handlers.inventory import _t as inv_t
+        await callback.message.edit_text(
+            inv_t(lang, "menu_title"),
+            reply_markup=inventory_menu_keyboard(lang),
+        )
+    elif target == "inv_vip":
+        from bot.handlers.inventory import _t as inv_t
+        if not state or not await has_hidden_access(state, MENU_VIP_INVENTORY):
+            await callback.message.edit_text(
+                _menu_text(lang),
+                reply_markup=main_menu_keyboard(lang, settings.club_tg_link),
+            )
+            await callback.answer(_expired_text(lang), show_alert=True)
+            return
+        await callback.message.edit_text(
+            inv_t(lang, "vip_category_title"),
+            reply_markup=inventory_category_keyboard(lang, vip=True),
+        )
     elif target == "sc_menu":
         from bot.handlers.service_center import show_sc_menu
         await show_sc_menu(callback, lang)
     elif target == "sc_admin":
+        if not state or not await has_hidden_access(state, MENU_SERVICE_ADMIN):
+            from bot.handlers.service_center import show_sc_menu
+            await show_sc_menu(callback, lang)
+            await callback.answer(_expired_text(lang), show_alert=True)
+            return
         from bot.handlers.service_center import show_sc_admin
         await show_sc_admin(callback, lang)
     else:

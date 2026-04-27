@@ -21,7 +21,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.config import settings
 from bot.keyboards.callbacks import NavCallback, VipCallback
-from bot.keyboards.inline import vip_menu_keyboard
+from bot.keyboards.inline import main_menu_keyboard, vip_menu_keyboard
 from bot.services.discount_sheet import (
     DEFAULT_AIRFREIGHT_SKU,
     DiscountItem,
@@ -29,6 +29,12 @@ from bot.services.discount_sheet import (
     get_airfreight_sheet_gid,
     get_discount_sheet_id,
     get_discounts,
+)
+from bot.services.hidden_access import (
+    MENU_VANDYCH,
+    clear_state_keep_hidden_access,
+    grant_hidden_access,
+    has_hidden_access,
 )
 from bot.services.notification import notification_service
 from bot.states.vip import VipStates
@@ -59,6 +65,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "shipping_text": "✈️ <b>空运支付</b>\n\n请通过以下链接完成空运费用支付：",
         "shipping_code": "\n\n🏷️ <b>折扣码：</b><code>{code}</code>",
         "shipping_no_url": "⚠️ 空运支付链接暂未配置，请联系客服。",
+        "access_expired": "🔐 Vandych 访问已过期，请重新输入访问码。",
         "wholesale_enter": "📦 <b>批发需求</b>\n\n请输入您的型号和采购数量，格式：\n<code>型号 数量</code>\n\n例如：<code>ABC-100 10</code>",
         "wholesale_parse_err": "❌ 格式错误，请按「型号 数量」输入，例如：<code>ABC-100 5</code>",
         "wholesale_vip": "✅ <b>已标记：VIP 客户 + 优先人工</b>\n\n请点击下方按钮转接专属客服。",
@@ -87,6 +94,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "shipping_text": "✈️ <b>Air Freight Payment</b>\n\nPay via the link below:",
         "shipping_code": "\n\n🏷️ <b>Discount code:</b><code>{code}</code>",
         "shipping_no_url": "⚠️ Air freight link not configured. Contact support.",
+        "access_expired": "🔐 Vandych access has expired. Please enter the access code again.",
         "wholesale_enter": "📦 <b>Wholesale Request</b>\n\nEnter model and quantity:\n<code>Model Quantity</code>\n\nExample: <code>ABC-100 10</code>",
         "wholesale_parse_err": "❌ Format error. Use: <code>Model Qty</code>, e.g. <code>ABC-100 5</code>",
         "wholesale_vip": "✅ <b>Marked: VIP customer + priority support</b>\n\nTap the button below to contact dedicated support.",
@@ -115,6 +123,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "shipping_text": "✈️ <b>Оплата авиадоставки</b>\n\nОплатите по ссылке ниже:",
         "shipping_code": "\n\n🏷️ <b>Промокод:</b><code>{code}</code>",
         "shipping_no_url": "⚠️ Ссылка авиадоставки не настроена.",
+        "access_expired": "🔐 Доступ Vandych истёк. Введите код доступа ещё раз.",
         "wholesale_enter": "📦 <b>Оптовый запрос</b>\n\nВведите модель и количество:\n<code>Модель Кол-во</code>\n\nПример: <code>ABC-100 10</code>",
         "wholesale_parse_err": "❌ Неверный формат. Используйте: <code>Модель Кол-во</code>",
         "wholesale_vip": "✅ <b>Отмечено: VIP клиент + приоритет</b>\n\nНажмите кнопку ниже, чтобы связаться с отдельной поддержкой.",
@@ -203,6 +212,24 @@ def _is_vandych_password(text: str | None) -> bool:
     return bool(text and text.strip() == settings.vandych_password)
 
 
+async def _ensure_vandych_access(
+    callback: CallbackQuery,
+    state: FSMContext | None,
+    lang: str,
+) -> bool:
+    if not state:
+        return False
+    if await has_hidden_access(state, MENU_VANDYCH):
+        return True
+    if callback.message:
+        await callback.message.edit_text(
+            _t(lang, "access_expired"),
+            reply_markup=main_menu_keyboard(lang, settings.club_tg_link),
+        )
+    await callback.answer(_t(lang, "access_expired"), show_alert=True)
+    return False
+
+
 def _user_tag(message: Message) -> str:
     if not message.from_user:
         return ""
@@ -287,23 +314,36 @@ async def on_vandych_password_catch(
     """捕获 Vandych 密码（最低优先级 handler，仅在其他 handler 未匹配时触发）."""
     if state:
         await state.clear()
+        await grant_hidden_access(state, MENU_VANDYCH)
     await message.answer(_t(lang, "welcome"), reply_markup=vip_menu_keyboard(lang))
 
 
 # ── VIP 菜单回调 ─────────────────────────────────────────
 
 @router.callback_query(VipCallback.filter(F.action == "menu"))
-async def on_vip_menu(callback: CallbackQuery, lang: str = "zh") -> None:
+async def on_vip_menu(
+    callback: CallbackQuery,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
     if not callback.message:
+        return
+    if not await _ensure_vandych_access(callback, state, lang):
         return
     await callback.message.edit_text(_t(lang, "welcome"), reply_markup=vip_menu_keyboard(lang))
     await callback.answer()
 
 
 @router.callback_query(VipCallback.filter(F.action == "discount"))
-async def on_vip_discount(callback: CallbackQuery, lang: str = "zh") -> None:
+async def on_vip_discount(
+    callback: CallbackQuery,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
     """展示 SKU 列表按钮，供用户选择."""
     if not callback.message:
+        return
+    if not await _ensure_vandych_access(callback, state, lang):
         return
     nav = _vip_nav_builder(lang)
     if not get_discount_sheet_id():
@@ -353,9 +393,12 @@ async def on_sku_select(
     callback: CallbackQuery,
     callback_data: VipCallback,
     lang: str = "zh",
+    state: FSMContext | None = None,
 ) -> None:
     """用户点击 SKU 按钮后，发送可复制的折扣信息."""
     if not callback.message:
+        return
+    if not await _ensure_vandych_access(callback, state, lang):
         return
     if not get_discount_sheet_id():
         await callback.answer(_t(lang, "discount_not_configured"), show_alert=True)
@@ -396,8 +439,14 @@ async def on_sku_select(
 
 
 @router.callback_query(VipCallback.filter(F.action == "shipping"))
-async def on_vip_shipping(callback: CallbackQuery, lang: str = "zh") -> None:
+async def on_vip_shipping(
+    callback: CallbackQuery,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
     if not callback.message:
+        return
+    if not await _ensure_vandych_access(callback, state, lang):
         return
     sheet_item = await _shipping_discount_item()
     url = sheet_item.link if sheet_item and _is_real_url(sheet_item.link) else _shipping_payment_url()
@@ -445,6 +494,8 @@ async def on_vip_wholesale_enter(
 ) -> None:
     if not callback.message or not state:
         return
+    if not await _ensure_vandych_access(callback, state, lang):
+        return
     await state.set_state(VipStates.awaiting_wholesale_input)
     await state.update_data(lang=lang)
     await callback.message.edit_text(_t(lang, "wholesale_enter"))
@@ -458,6 +509,10 @@ async def on_wholesale_input(
     state: FSMContext | None = None,
 ) -> None:
     if not state:
+        return
+    if not await has_hidden_access(state, MENU_VANDYCH):
+        await state.clear()
+        await message.answer(_t(lang, "access_expired"))
         return
     text = (message.text or "").strip()
     parts = text.rsplit(None, 1)  # 从右侧分割，最后一个空格分隔数量
@@ -476,7 +531,7 @@ async def on_wholesale_input(
         await message.answer(_t(lang, "wholesale_parse_err"))
         return
 
-    await state.clear()
+    await clear_state_keep_hidden_access(state)
 
     if qty >= 5:
         result_key = "wholesale_vip"

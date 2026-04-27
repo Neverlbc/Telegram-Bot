@@ -21,6 +21,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.config import settings
 from bot.keyboards.callbacks import InventoryCallback, NavCallback
 from bot.keyboards.inline import inventory_category_keyboard, inventory_menu_keyboard
+from bot.services.hidden_access import MENU_VIP_INVENTORY, grant_hidden_access, has_hidden_access
 from bot.services.outdoor_sheets import OutdoorItem, get_outdoor_inventory
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "contact_tg": "💬 TG 联系客服",
         "contact_wa": "💬 WhatsApp 联系",
         "data_delay": "\n\n<i>数据可能有 5 分钟缓存延迟</i>",
+        "access_expired": "🔐 VIP 访问已过期，请重新输入访问码。",
         "loading_err": "❌ 读取库存失败，请稍后重试。",
         "not_configured": "⚠️ 库存服务暂未配置，请稍后再试。",
     },
@@ -85,6 +87,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "contact_tg": "💬 TG Contact",
         "contact_wa": "💬 WhatsApp",
         "data_delay": "\n\n<i>Data may be up to 5 minutes delayed</i>",
+        "access_expired": "🔐 VIP access has expired. Please enter the access code again.",
         "loading_err": "❌ Failed to load inventory. Please try again.",
         "not_configured": "⚠️ Inventory service not configured yet.",
     },
@@ -115,6 +118,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "contact_tg": "💬 TG Связаться",
         "contact_wa": "💬 WhatsApp",
         "data_delay": "\n\n<i>Данные обновляются раз в 5 минут</i>",
+        "access_expired": "🔐 VIP-доступ истёк. Введите код доступа ещё раз.",
         "loading_err": "❌ Ошибка загрузки. Попробуйте позже.",
         "not_configured": "⚠️ Сервис наличия ещё не настроен.",
     },
@@ -325,6 +329,24 @@ def _contact_buttons(lang: str, vip: bool, user_id: int | None = None) -> list[I
     ]
 
 
+async def _ensure_vip_access(
+    callback: CallbackQuery,
+    state: FSMContext | None,
+    lang: str,
+) -> bool:
+    if not state:
+        return False
+    if await has_hidden_access(state, MENU_VIP_INVENTORY):
+        return True
+    if callback.message:
+        await callback.message.edit_text(
+            _t(lang, "menu_title"),
+            reply_markup=inventory_menu_keyboard(lang),
+        )
+    await callback.answer(_t(lang, "access_expired"), show_alert=True)
+    return False
+
+
 # ── Handlers ────────────────────────────────────────────
 
 @router.callback_query(InventoryCallback.filter(F.action == "menu"))
@@ -360,8 +382,11 @@ async def on_inventory_categories(
     callback: CallbackQuery,
     callback_data: InventoryCallback,
     lang: str = "zh",
+    state: FSMContext | None = None,
 ) -> None:
     if not callback.message:
+        return
+    if callback_data.vip and not await _ensure_vip_access(callback, state, lang):
         return
     await callback.message.edit_text(
         _t(lang, "vip_category_title") if callback_data.vip else _t(lang, "category_title"),
@@ -371,8 +396,14 @@ async def on_inventory_categories(
 
 
 @router.message(StateFilter(default_state), F.text == settings.vip_inventory_password)
-async def on_vip_password_text(message: Message, lang: str = "zh") -> None:
+async def on_vip_password_text(
+    message: Message,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
     """VIP 密码文本触发（无按钮，直接发密码即可进入 VIP 查询）."""
+    if state:
+        await grant_hidden_access(state, MENU_VIP_INVENTORY)
     await message.answer(
         _t(lang, "vip_category_title"),
         reply_markup=inventory_category_keyboard(lang, vip=True),
@@ -384,6 +415,7 @@ async def on_inventory_category(
     callback: CallbackQuery,
     callback_data: InventoryCallback,
     lang: str = "zh",
+    state: FSMContext | None = None,
 ) -> None:
     """品类选择后展示品牌列表."""
     if not callback.message:
@@ -391,6 +423,8 @@ async def on_inventory_category(
 
     vip = callback_data.vip
     cat_id = callback_data.cat_id
+    if vip and not await _ensure_vip_access(callback, state, lang):
+        return
 
     if cat_id != "outdoor":
         await callback.answer("Coming soon", show_alert=True)
@@ -442,12 +476,15 @@ async def on_inventory_brand(
     callback: CallbackQuery,
     callback_data: InventoryCallback,
     lang: str = "zh",
+    state: FSMContext | None = None,
 ) -> None:
     """品牌选择后展示该品牌库存."""
     if not callback.message:
         return
 
     vip = callback_data.vip
+    if vip and not await _ensure_vip_access(callback, state, lang):
+        return
 
     if not settings.outdoor_sheet_id:
         await callback.message.edit_text(_t(lang, "not_configured"))
@@ -500,12 +537,15 @@ async def on_inventory_quick(
     callback: CallbackQuery,
     callback_data: InventoryCallback,
     lang: str = "zh",
+    state: FSMContext | None = None,
 ) -> None:
     """快速展示所有品牌中当前有货的库存."""
     if not callback.message:
         return
 
     vip = callback_data.vip
+    if vip and not await _ensure_vip_access(callback, state, lang):
+        return
 
     if not settings.outdoor_sheet_id:
         await callback.message.edit_text(_t(lang, "not_configured"))

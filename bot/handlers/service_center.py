@@ -25,6 +25,12 @@ from bot.keyboards.inline import (
     service_center_admin_keyboard,
     service_center_menu_keyboard,
 )
+from bot.services.hidden_access import (
+    MENU_SERVICE_ADMIN,
+    clear_state_keep_hidden_access,
+    grant_hidden_access,
+    has_hidden_access,
+)
 from bot.services.service_center_sheet import (
     get_all_records,
     get_repair_status,
@@ -83,6 +89,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "notify_watch": "✅ 已订阅状态更新，有变更时将自动通知您。",
         "enter_admin_pw": "🔐 请输入管理员密码：",
         "wrong_admin_pw": "❌ 密码错误。",
+        "access_expired": "🔐 管理员访问已过期，请重新输入访问码。",
         "admin_title": (
             "👁️ 您好，欢迎来到服务中心的隐藏菜单。\n\n"
             "当前可用功能：\n\n"
@@ -144,6 +151,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "notify_watch": "✅ Subscribed to updates — you'll be notified on any change.",
         "enter_admin_pw": "🔐 Enter admin password:",
         "wrong_admin_pw": "❌ Incorrect password.",
+        "access_expired": "🔐 Admin access has expired. Please enter the access code again.",
         "admin_title": (
             "👁️ Welcome to the Service Center hidden menu.\n\n"
             "Available functions:\n\n"
@@ -208,6 +216,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "notify_watch": "✅ Вы подписаны на обновления — уведомим при изменении.",
         "enter_admin_pw": "🔐 Введите пароль администратора:",
         "wrong_admin_pw": "❌ Неверный пароль.",
+        "access_expired": "🔐 Доступ администратора истёк. Введите код доступа ещё раз.",
         "admin_title": (
             "👁️ Добро пожаловать в скрытое меню сервисного центра.\n\n"
             "Доступные функции:\n\n"
@@ -233,6 +242,24 @@ def _t(lang: str, key: str) -> str:
 def _agent_url(prefill: str) -> str:
     import urllib.parse
     return f"https://t.me/{settings.human_agent_username}?text={urllib.parse.quote(prefill)}"
+
+
+async def _ensure_admin_access(
+    callback: CallbackQuery,
+    state: FSMContext | None,
+    lang: str,
+) -> bool:
+    if not state:
+        return False
+    if await has_hidden_access(state, MENU_SERVICE_ADMIN):
+        return True
+    if callback.message:
+        await callback.message.edit_text(
+            _t(lang, "menu_title"),
+            reply_markup=service_center_menu_keyboard(lang, settings.service_center_tg_link),
+        )
+    await callback.answer(_t(lang, "access_expired"), show_alert=True)
+    return False
 
 
 # ── 主菜单 ───────────────────────────────────────────────
@@ -307,7 +334,7 @@ async def on_cdek_no_input(
     if not state:
         return
     query = (message.text or "").strip()
-    await state.clear()
+    await clear_state_keep_hidden_access(state)
 
     try:
         record = await get_repair_status(query) or await get_repair_status_by_sn(query)
@@ -370,13 +397,22 @@ async def on_cdek_no_input(
 async def on_admin_password(
     message: Message,
     lang: str = "zh",
+    state: FSMContext | None = None,
 ) -> None:
+    if state:
+        await grant_hidden_access(state, MENU_SERVICE_ADMIN)
     await message.answer(_t(lang, "admin_title"), reply_markup=service_center_admin_keyboard(lang))
 
 
 @router.callback_query(ServiceCenterCallback.filter(F.action == "admin_menu"))
-async def on_admin_notify_info(callback: CallbackQuery, lang: str = "zh") -> None:
+async def on_admin_notify_info(
+    callback: CallbackQuery,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
     if not callback.message:
+        return
+    if not await _ensure_admin_access(callback, state, lang):
         return
     info = {
         "zh": "📱 <b>维修完成通知</b>\n\n该功能需在数据库中配置终端用户手机号，暂未开放。",
@@ -397,8 +433,14 @@ async def on_admin_notify_info(callback: CallbackQuery, lang: str = "zh") -> Non
 
 
 @router.callback_query(ServiceCenterCallback.filter(F.action == "sn_list"))
-async def on_sn_list(callback: CallbackQuery, lang: str = "zh") -> None:
+async def on_sn_list(
+    callback: CallbackQuery,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
     if not callback.message:
+        return
+    if not await _ensure_admin_access(callback, state, lang):
         return
     try:
         records = await get_all_records()
@@ -446,6 +488,8 @@ async def on_sn_search_enter(
 ) -> None:
     if not callback.message or not state:
         return
+    if not await _ensure_admin_access(callback, state, lang):
+        return
     prompt = {
         "zh": "🔎 <b>查询设备序列号</b>\n\n请输入 SN 序列号（精确匹配）：",
         "en": "🔎 <b>Device SN Search</b>\n\nEnter the serial number (exact match):",
@@ -464,8 +508,12 @@ async def on_sn_query_input(
 ) -> None:
     if not state:
         return
+    if not await has_hidden_access(state, MENU_SERVICE_ADMIN):
+        await state.clear()
+        await message.answer(_t(lang, "access_expired"))
+        return
     sn = (message.text or "").strip()
-    await state.clear()
+    await clear_state_keep_hidden_access(state)
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
