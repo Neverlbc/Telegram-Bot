@@ -33,6 +33,25 @@ def test_resolve_plus_alias_from_sheet() -> None:
     assert lookup.kyb_skus == ("T2SPLUS",)
 
 
+def test_pfn640_plus_alias_uses_jushuitan_10_code() -> None:
+    """PFN640 plus aliases are sheet aliases; Jushuitan must receive the 10 code."""
+    from bot.services.sku_mapping import resolve_sku, service_query_skus
+
+    lookups = [
+        resolve_sku("PFN640+V2"),
+        resolve_sku("PFN640 + V2"),
+        resolve_sku("PFN640十V2"),
+        resolve_sku("PFN640-V2"),
+    ]
+
+    for lookup in lookups:
+        assert lookup.jst_skus == ("PFN64010V2",)
+        assert lookup.kyb_skus == ("PFN640-V2",)
+
+    assert service_query_skus(lookups, "jst") == ["PFN64010V2"]
+    assert service_query_skus(lookups, "kyb") == ["PFN640-V2"]
+
+
 def test_service_query_skus_deduplicates_mapped_pairs() -> None:
     """If both sides of one pair appear in the sheet, each service is queried once."""
     from bot.services.sku_mapping import resolve_skus, service_query_skus

@@ -29,8 +29,7 @@ class SkuLookup:
         return self.jst_skus != (self.sheet_sku,) or self.kyb_skus != (self.sheet_sku,)
 
 
-# Each row is: (Jushuitan codes, KYB codes).
-# Some source spreadsheets render/copy "+" as "十", so both forms are accepted.
+# Each row is: (Jushuitan query codes, KYB query codes).
 _SKU_GROUPS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     (("D28720",), ("D28720-A9",)),
     (("DCB203-A9",), ("DCB203",)),
@@ -41,7 +40,7 @@ _SKU_GROUPS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     (("F17BMAX-01",), ("17BMAX-01",)),
     (("T2S+FSYZJ", "T2S十FSYZJ"), ("T2SPLUS-FSYZJ",)),
     (("Jerry-YM2.0",), ("JERRY-YM-V2",)),
-    (("PFN640+V2", "PFN640十V2"), ("PFN640-V2",)),
+    (("PFN64010V2",), ("PFN640-V2",)),
     (("UTi260B+", "UTi260B十"), ("UTi260BPLUS",)),
     (("UTi165B+", "UTi165B十"), ("UTi165BPLUS",)),
     (("T2SPRO-SET",), ("T2SPLUS-03",)),
@@ -50,10 +49,22 @@ _SKU_GROUPS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     (("XS03-35LRF",), ("XS03-35LRF-2AM03-DC",)),
 )
 
+# Additional sheet-only aliases that should resolve to a group but should not
+# necessarily be sent to either external API.
+_SKU_ALIASES: dict[str, str] = {
+    "PFN640+V2": "PFN64010V2",
+    "PFN640 + V2": "PFN64010V2",
+    "PFN640十V2": "PFN64010V2",
+}
+
 _SKU_INDEX: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
 for _jst_skus, _kyb_skus in _SKU_GROUPS:
     for _sku in (*_jst_skus, *_kyb_skus):
         _SKU_INDEX[_sku] = (_jst_skus, _kyb_skus)
+
+for _alias, _canonical in _SKU_ALIASES.items():
+    if _canonical in _SKU_INDEX:
+        _SKU_INDEX[_alias] = _SKU_INDEX[_canonical]
 
 
 def resolve_sku(sheet_sku: str) -> SkuLookup:
