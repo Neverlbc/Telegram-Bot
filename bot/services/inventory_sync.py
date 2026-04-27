@@ -66,6 +66,16 @@ def _unique(values: list[str]) -> list[str]:
     return list(dict.fromkeys(value.strip() for value in values if value.strip()))
 
 
+def _jst_plus_variants(sku: str) -> list[str]:
+    stripped = " ".join(sku.strip().split())
+    if "+" not in stripped:
+        return []
+
+    compact_plus = stripped.replace(" + ", "+")
+    variants = [compact_plus.replace("+", "十")]
+    return _unique(variants)
+
+
 def _get_sku_alias_map() -> dict[str, dict[str, list[str]]]:
     aliases: dict[str, dict[str, list[str]]] = {
         sku: {
@@ -90,7 +100,12 @@ def _get_sku_alias_map() -> dict[str, dict[str, list[str]]]:
 def _source_skus(sheet_sku: str, source: str, aliases: dict[str, dict[str, list[str]]]) -> list[str]:
     source_aliases = aliases.get(sheet_sku, {}).get(source, [])
     if source_aliases:
+        if source == "jst":
+            variants = [variant for sku in source_aliases for variant in _jst_plus_variants(sku)]
+            return _unique([*source_aliases, *variants])
         return _unique(source_aliases)
+    if source == "jst":
+        return _unique([sheet_sku, *_jst_plus_variants(sheet_sku)])
     return [sheet_sku]
 
 
