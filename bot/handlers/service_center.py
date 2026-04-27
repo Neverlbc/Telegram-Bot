@@ -12,9 +12,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -28,7 +26,6 @@ from bot.keyboards.inline import (
 from bot.services.hidden_access import (
     MENU_SERVICE_ADMIN,
     clear_state_keep_hidden_access,
-    grant_hidden_access,
     has_hidden_access,
 )
 from bot.services.service_center_sheet import (
@@ -389,19 +386,6 @@ async def on_cdek_no_input(
         notify_line=notify_line,
     )
     await message.answer(text, reply_markup=builder.as_markup())
-
-
-# ── 管理员入口（文本密码触发，无按钮）────────────────────────
-
-@router.message(StateFilter(default_state), F.text == settings.service_admin_password)
-async def on_admin_password(
-    message: Message,
-    lang: str = "zh",
-    state: FSMContext | None = None,
-) -> None:
-    if state:
-        await grant_hidden_access(state, MENU_SERVICE_ADMIN)
-    await message.answer(_t(lang, "admin_title"), reply_markup=service_center_admin_keyboard(lang))
 
 
 @router.callback_query(ServiceCenterCallback.filter(F.action == "admin_menu"))

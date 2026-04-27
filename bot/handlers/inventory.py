@@ -12,16 +12,14 @@ from html import escape
 from unicodedata import east_asian_width
 
 from aiogram import F, Router
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import default_state
-from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.config import settings
 from bot.keyboards.callbacks import InventoryCallback, NavCallback
 from bot.keyboards.inline import inventory_category_keyboard, inventory_menu_keyboard
-from bot.services.hidden_access import MENU_VIP_INVENTORY, grant_hidden_access, has_hidden_access
+from bot.services.hidden_access import MENU_VIP_INVENTORY, has_hidden_access
 from bot.services.outdoor_sheets import OutdoorItem, get_outdoor_inventory
 
 logger = logging.getLogger(__name__)
@@ -393,21 +391,6 @@ async def on_inventory_categories(
         reply_markup=inventory_category_keyboard(lang, vip=callback_data.vip),
     )
     await callback.answer()
-
-
-@router.message(StateFilter(default_state), F.text == settings.vip_inventory_password)
-async def on_vip_password_text(
-    message: Message,
-    lang: str = "zh",
-    state: FSMContext | None = None,
-) -> None:
-    """VIP 密码文本触发（无按钮，直接发密码即可进入 VIP 查询）."""
-    if state:
-        await grant_hidden_access(state, MENU_VIP_INVENTORY)
-    await message.answer(
-        _t(lang, "vip_category_title"),
-        reply_markup=inventory_category_keyboard(lang, vip=True),
-    )
 
 
 @router.callback_query(InventoryCallback.filter(F.action == "category"))

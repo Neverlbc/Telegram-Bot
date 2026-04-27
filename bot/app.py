@@ -13,6 +13,7 @@ from redis.asyncio import Redis
 
 from bot.config import settings
 from bot.handlers import (
+    hidden_entries,
     inventory,
     menu,
     service_center,
@@ -81,8 +82,9 @@ def create_dispatcher(redis: Redis | None = None) -> Dispatcher:  # type: ignore
     dp.message.middleware(I18nMiddleware())
     dp.callback_query.middleware(I18nMiddleware())
 
-    # ── 注册路由（顺序很重要：vip.py 的自由文本 handler 必须最后注册）──
+    # ── 注册路由（顺序很重要：隐藏密码入口必须先于各功能 FSM 文本输入）──
     dp.include_router(start.router)
+    dp.include_router(hidden_entries.router)
     dp.include_router(menu.router)
     dp.include_router(inventory.router)
     dp.include_router(service_center.router)

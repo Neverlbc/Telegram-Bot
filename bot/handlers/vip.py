@@ -13,9 +13,7 @@ import logging
 from html import escape
 
 from aiogram import F, Router
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -33,7 +31,6 @@ from bot.services.discount_sheet import (
 from bot.services.hidden_access import (
     MENU_VANDYCH,
     clear_state_keep_hidden_access,
-    grant_hidden_access,
     has_hidden_access,
 )
 from bot.services.notification import notification_service
@@ -208,10 +205,6 @@ def _vip_nav_builder(lang: str, back_action: str = "menu") -> InlineKeyboardBuil
     return builder
 
 
-def _is_vandych_password(text: str | None) -> bool:
-    return bool(text and text.strip() == settings.vandych_password)
-
-
 async def _ensure_vandych_access(
     callback: CallbackQuery,
     state: FSMContext | None,
@@ -301,21 +294,6 @@ async def _notify_wholesale_request(message: Message, model: str, qty: int) -> N
             await notification_service.notify_support_group(notice, message.from_user.id if message.from_user else None)
     except Exception as e:
         logger.warning("notify wholesale request failed: %s", e)
-
-
-# ── 密码触发（自由文本消息）──────────────────────────────
-
-@router.message(StateFilter(default_state), F.text.func(_is_vandych_password))
-async def on_vandych_password_catch(
-    message: Message,
-    lang: str = "zh",
-    state: FSMContext | None = None,
-) -> None:
-    """捕获 Vandych 密码（最低优先级 handler，仅在其他 handler 未匹配时触发）."""
-    if state:
-        await state.clear()
-        await grant_hidden_access(state, MENU_VANDYCH)
-    await message.answer(_t(lang, "welcome"), reply_markup=vip_menu_keyboard(lang))
 
 
 # ── VIP 菜单回调 ─────────────────────────────────────────
