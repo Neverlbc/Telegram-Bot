@@ -22,7 +22,14 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.config import settings
 from bot.keyboards.callbacks import NavCallback, VipCallback
 from bot.keyboards.inline import vip_menu_keyboard
-from bot.services.discount_sheet import get_discounts
+from bot.services.discount_sheet import (
+    DEFAULT_AIRFREIGHT_SKU,
+    DiscountItem,
+    find_discount_by_sku,
+    get_airfreight_sheet_gid,
+    get_discount_sheet_id,
+    get_discounts,
+)
 from bot.services.notification import notification_service
 from bot.states.vip import VipStates
 
@@ -161,6 +168,19 @@ def _shipping_payment_url() -> str:
     return VANDYCH_DEFAULT_SHIPPING_URL
 
 
+def _shipping_sku() -> str:
+    return settings.vandych_shipping_sku.strip() or DEFAULT_AIRFREIGHT_SKU
+
+
+async def _shipping_discount_item() -> DiscountItem | None:
+    try:
+        items = await get_discounts(gid=get_airfreight_sheet_gid())
+    except Exception as exc:
+        logger.warning("get shipping discount failed: %s", exc)
+        return None
+    return find_discount_by_sku(items, _shipping_sku())
+
+
 def _airfreight_prefill(user_id: int | None) -> str:
     tag = f"，TGID:{user_id}" if user_id else ""
     return f"你好，我需要了解航空货运服务。来源：Vandych的帐篷{tag}"
@@ -286,7 +306,7 @@ async def on_vip_discount(callback: CallbackQuery, lang: str = "zh") -> None:
     if not callback.message:
         return
     nav = _vip_nav_builder(lang)
-    if not settings.discount_sheet_id:
+    if not get_discount_sheet_id():
         await callback.message.edit_text(_t(lang, "discount_not_configured"), reply_markup=nav.as_markup())
         await callback.answer()
         return
@@ -337,7 +357,7 @@ async def on_sku_select(
     """用户点击 SKU 按钮后，发送可复制的折扣信息."""
     if not callback.message:
         return
-    if not settings.discount_sheet_id:
+    if not get_discount_sheet_id():
         await callback.answer(_t(lang, "discount_not_configured"), show_alert=True)
         return
 
@@ -357,6 +377,11 @@ async def on_sku_select(
     text = item.format_copyable(lang) + _t(lang, "discount_note")
 
     builder = InlineKeyboardBuilder()
+    if _is_real_url(item.link):
+        builder.row(InlineKeyboardButton(
+            text={"zh": "🔗 打开链接", "en": "🔗 Open Link", "ru": "🔗 Открыть ссылку"}.get(lang, "🔗"),
+            url=item.link,
+        ))
     builder.row(InlineKeyboardButton(
         text={"zh": "◀️ 返回列表", "en": "◀️ Back to list", "ru": "◀️ К списку"}.get(lang, "◀️"),
         callback_data=VipCallback(action="discount").pack(),
@@ -374,8 +399,14 @@ async def on_sku_select(
 async def on_vip_shipping(callback: CallbackQuery, lang: str = "zh") -> None:
     if not callback.message:
         return
-    url = _shipping_payment_url()
-    code = settings.vandych_shipping_discount_code.strip()
+    sheet_item = await _shipping_discount_item()
+    url = sheet_item.link if sheet_item and _is_real_url(sheet_item.link) else _shipping_payment_url()
+    code = (
+        sheet_item.code.strip()
+        if sheet_item and sheet_item.code.strip()
+        else settings.vandych_shipping_discount_code.strip()
+    )
+    notes = sheet_item.notes.strip() if sheet_item and sheet_item.notes else ""
     builder = InlineKeyboardBuilder()
     if url:
         builder.row(InlineKeyboardButton(
@@ -385,6 +416,9 @@ async def on_vip_shipping(callback: CallbackQuery, lang: str = "zh") -> None:
         text = _t(lang, "shipping_text")
         if code:
             text += _t(lang, "shipping_code").format(code=escape(code))
+        if notes:
+            note_label = {"zh": "说明", "en": "Notes", "ru": "Примечания"}.get(lang, "Notes")
+            text += f"\n\n<b>{note_label}：</b>{escape(notes, quote=False)}"
     else:
         text = _t(lang, "shipping_no_url")
         user_id = callback.from_user.id if callback.from_user else None

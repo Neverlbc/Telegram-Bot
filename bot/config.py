@@ -98,6 +98,8 @@ class Settings(BaseSettings):
         description="Vandych VIP 空运支付链接",
     )
     vandych_shipping_discount_code: str = Field("", description="Vandych 空运支付折扣码")
+    vandych_shipping_sku: str = Field("BF-BCJ", description="Vandych 空运支付在折扣表中的 SKU")
+    vandych_shipping_sheet_gid: int = Field(1510817399, description="Vandych 空运支付 Google Sheet tab GID")
 
     # ── 密码入口 ──────────────────────────────────────
     vip_inventory_password: str = Field("ABFVIP2026Hunter", description="VIP 现货查询密码")
@@ -111,7 +113,10 @@ class Settings(BaseSettings):
     # ── Google Sheets (新模块) ─────────────────────────
     outdoor_sheet_id: str = Field("", description="莫斯科户外现货 Google Sheet ID")
     service_center_sheet_id: str = Field("", description="服务中心检修 Google Sheet ID")
-    discount_sheet_id: str = Field("", description="促销折扣 Google Sheet ID")
+    discount_sheet_id: str = Field(
+        "1OgPkTP_1lqQnYC5yqc1c0bT7ixlTD8WUBe0PcAvyHEE",
+        description="促销折扣 Google Sheet ID",
+    )
     discount_sheet_gid: int = Field(1376031396, description="促销折扣 Google Sheet tab GID")
     outdoor_sku_aliases: str = Field(
         "",

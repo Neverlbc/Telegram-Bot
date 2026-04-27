@@ -12,6 +12,7 @@ import io
 import logging
 import os
 from dataclasses import dataclass
+from html import escape
 from typing import Any
 
 import aiohttp
@@ -27,6 +28,11 @@ SHEETS_CSV_URL = (
 )
 CACHE_TTL = 300
 
+DEFAULT_DISCOUNT_SHEET_ID = "1OgPkTP_1lqQnYC5yqc1c0bT7ixlTD8WUBe0PcAvyHEE"
+DEFAULT_DISCOUNT_SHEET_GID = 1376031396
+DEFAULT_AIRFREIGHT_SHEET_GID = 1510817399
+DEFAULT_AIRFREIGHT_SKU = "BF-BCJ"
+
 COL_MODEL = "SKU"
 COL_DISCOUNT = "discount"  # 折扣码
 COL_LINK = "Links"
@@ -34,7 +40,22 @@ COL_CODE = "discount"      # 和折扣码同列
 COL_ACTIVE = "active"      # 1/yes → 有效（可选列，缺省视为有效）
 COL_NOTES = "Notes"
 
+_PLACEHOLDER_MODELS = {"sku", "model", "型号", "产品编码"}
+_EMPTY_LINK_OR_CODE = {"", "links", "link", "链接", "discount", "code", "折扣", "折扣码"}
+
 _redis_client: Redis | None = None
+
+
+def get_discount_sheet_id() -> str:
+    return settings.discount_sheet_id.strip() or DEFAULT_DISCOUNT_SHEET_ID
+
+
+def get_discount_sheet_gid() -> int:
+    return settings.discount_sheet_gid or DEFAULT_DISCOUNT_SHEET_GID
+
+
+def get_airfreight_sheet_gid() -> int:
+    return settings.vandych_shipping_sheet_gid or DEFAULT_AIRFREIGHT_SHEET_GID
 
 
 def _get_redis() -> Redis | None:
@@ -61,15 +82,15 @@ class DiscountItem:
             "ru": ("SKU", "Ссылки", "Код", "Примечания"),
         }.get(lang, ("SKU", "Links", "Code", "Notes"))
 
-        lines = [f"<b>{labels[0]}：</b><code>{self.model}</code>"]
+        lines = [f"<b>{labels[0]}：</b><code>{escape(self.model)}</code>"]
         if self.link:
-            lines.append(f"\n<b>{labels[1]}：</b>{self.link}")
+            lines.append(f"\n<b>{labels[1]}：</b>{escape(self.link, quote=False)}")
         if self.code:
-            lines.append(f"\n<b>{labels[2]}：</b><code>{self.code}</code>")
+            lines.append(f"\n<b>{labels[2]}：</b><code>{escape(self.code)}</code>")
         if self.notes:
-            lines.append(f"\n<b>{labels[3]}：</b>{self.notes}")
+            lines.append(f"\n<b>{labels[3]}：</b>{escape(self.notes, quote=False)}")
         elif self.discount:
-            lines.append(f"\n<b>{labels[3]}：</b>{self.discount}")
+            lines.append(f"\n<b>{labels[3]}：</b>{escape(self.discount, quote=False)}")
         return "\n".join(lines)
 
     def format_text(self, lang: str = "zh") -> str:
@@ -92,7 +113,13 @@ def _parse_rows(rows: list[dict[str, Any]]) -> list[DiscountItem]:
     items: list[DiscountItem] = []
     for row in rows:
         model = _row_value(row, COL_MODEL, "sku", "model", "型号", "产品编码")
-        if not model:
+        if not model or model.casefold() in _PLACEHOLDER_MODELS:
+            continue
+        discount = _row_value(row, COL_DISCOUNT, "discount", "折扣", "折扣码")
+        link = _row_value(row, COL_LINK, "links", "link", "链接")
+        code = _row_value(row, COL_CODE, "code", "discount", "折扣码")
+        notes = _row_value(row, COL_NOTES, "notes", "备注", "说明")
+        if link.casefold() in _EMPTY_LINK_OR_CODE and code.casefold() in _EMPTY_LINK_OR_CODE:
             continue
         raw_active = _row_value(row, COL_ACTIVE, "active", "是否有效", "有效") or "1"
         active = raw_active.casefold() in ("1", "yes", "true", "是", "有效", "y")
@@ -100,11 +127,11 @@ def _parse_rows(rows: list[dict[str, Any]]) -> list[DiscountItem]:
             continue
         items.append(DiscountItem(
             model=model,
-            discount=_row_value(row, COL_DISCOUNT, "discount", "折扣", "折扣码"),
-            link=_row_value(row, COL_LINK, "links", "link", "链接"),
-            code=_row_value(row, COL_CODE, "code", "discount", "折扣码"),
+            discount=discount,
+            link=link,
+            code=code,
             active=active,
-            notes=_row_value(row, COL_NOTES, "notes", "备注", "说明"),
+            notes=notes,
         ))
     return items
 
@@ -126,10 +153,9 @@ def _get_gspread_client() -> Any:
     return gspread.authorize(creds)
 
 
-def _fetch_discount_rows_sync() -> list[dict[str, Any]]:
+def _fetch_discount_rows_sync(sheet_id: str, gid: int) -> list[dict[str, Any]]:
     gc = _get_gspread_client()
-    spreadsheet = gc.open_by_key(settings.discount_sheet_id)
-    gid = settings.discount_sheet_gid
+    spreadsheet = gc.open_by_key(sheet_id)
     worksheet = next((ws for ws in spreadsheet.worksheets() if ws.id == gid), None)
     if worksheet is None:
         logger.warning("Discount worksheet gid=%s not found; using first worksheet", gid)
@@ -137,15 +163,15 @@ def _fetch_discount_rows_sync() -> list[dict[str, Any]]:
     return worksheet.get_all_records()
 
 
-async def get_discounts() -> list[DiscountItem]:
+async def get_discounts(gid: int | None = None) -> list[DiscountItem]:
     """获取当前有效的促销折扣列表."""
-    sheet_id = settings.discount_sheet_id
+    sheet_id = get_discount_sheet_id()
     if not sheet_id:
         logger.warning("discount_sheet_id not configured")
         return []
 
-    gid = settings.discount_sheet_gid
-    cache_key = f"discount_items:{sheet_id}:{gid}"
+    sheet_gid = gid if gid is not None else get_discount_sheet_gid()
+    cache_key = f"discount_items:{sheet_id}:{sheet_gid}"
     redis = _get_redis()
 
     if redis is not None:
@@ -159,13 +185,13 @@ async def get_discounts() -> list[DiscountItem]:
     creds_file = settings.google_credentials_file
     if creds_file and os.path.isfile(creds_file):
         try:
-            rows = await asyncio.to_thread(_fetch_discount_rows_sync)
+            rows = await asyncio.to_thread(_fetch_discount_rows_sync, sheet_id, sheet_gid)
             items = _parse_rows(rows)
             return items
         except Exception as exc:
             logger.warning("Failed to fetch discount sheet via service account: %s", exc)
 
-    url = SHEETS_CSV_URL.format(sheet_id=sheet_id, gid=gid)
+    url = SHEETS_CSV_URL.format(sheet_id=sheet_id, gid=sheet_gid)
     try:
         async with aiohttp.ClientSession(trust_env=True) as http:
             async with http.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
@@ -205,3 +231,18 @@ def fuzzy_find(items: list[DiscountItem], query: str) -> list[tuple[int, Discoun
         if q in m or m in q:
             results.append((idx, item))
     return results
+
+
+def find_discount_by_sku(items: list[DiscountItem], sku: str) -> DiscountItem | None:
+    """按 SKU 查找折扣项，优先精确匹配，失败后做一次宽松匹配."""
+    target = _normalize(sku)
+    if not target:
+        return None
+    for item in items:
+        if _normalize(item.model) == target:
+            return item
+    for item in items:
+        model = _normalize(item.model)
+        if target in model or model in target:
+            return item
+    return None
