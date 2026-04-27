@@ -37,8 +37,13 @@ VANDYCH_DEFAULT_SHIPPING_URL = (
 TEXTS: dict[str, dict[str, str]] = {
     "zh": {
         "welcome": (
-            "⛺ <b>Vandych 的帐篷</b>\n\n"
-            "欢迎！请选择您需要的服务："
+            "🏕️ 欢迎来到【Vandych的帐篷】专属菜单。\n\n"
+            "这是我司为 Vandych 定制的专属服务空间。\n\n"
+            "当前功能：\n\n"
+            "🏷️ 获取折扣 — 每次促销的链接与折扣代码将在促销前提前更新，您可在此第一时间获取。\n\n"
+            "✈️ 支付空运 — 输入指定的折扣代码，即可匹配您的空运订单并完成支付。"
+            "我们的客服团队每日检查发货系统，若系统内出现您的空运订单且有设备等待发货，我们将直接为您处理。\n\n"
+            "📦 我需要批发 — 如需批量订购多件设备，请直接联系我们，为您安排专属对接。"
         ),
         "discount_title": "🎁 <b>促销折扣</b>\n\n当前有效折扣：\n\n",
         "discount_empty": "📭 当前暂无促销折扣。",
@@ -57,8 +62,16 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "en": {
         "welcome": (
-            "⛺ <b>Vandych's tent</b>\n\n"
-            "Welcome! Select a service:"
+            "🏕️ Welcome to \"Vandych's Tent\" — your exclusive menu.\n\n"
+            "A customized service space built for Vandych.\n\n"
+            "Available functions:\n\n"
+            "🏷️ Get Discounts — promo links and discount codes for every sale are updated here before launch. "
+            "You get them first.\n\n"
+            "✈️ Pay for Air Freight — enter your assigned discount code to match it with your air freight order "
+            "and complete payment. Our support team checks the shipping system daily; if your air order appears "
+            "and equipment is ready to ship, we process it immediately.\n\n"
+            "📦 I Need Wholesale — if you'd like to order multiple units, contact us directly. "
+            "We'll arrange a dedicated specialist for you."
         ),
         "discount_title": "🎁 <b>Promotions</b>\n\nActive discounts:\n\n",
         "discount_empty": "📭 No active promotions at the moment.",
@@ -77,8 +90,16 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "ru": {
         "welcome": (
-            "⛺ <b>Палатка Вандыча</b>\n\n"
-            "Добро пожаловать! Выберите услугу:"
+            "🏕️ Добро пожаловать в «Палатка Вандыча» — ваше персональное меню.\n\n"
+            "Это пространство индивидуальных услуг, созданное специально для Vandych.\n\n"
+            "Доступные функции:\n\n"
+            "🏷️ Получить скидку — ссылки и промокоды на каждую акцию обновляются здесь до старта продаж. "
+            "Вы узнаете о них первыми.\n\n"
+            "✈️ Оплата авиадоставки — введите указанный промокод, чтобы сопоставить его с вашим авиазаказом "
+            "и завершить оплату. Наша команда поддержки ежедневно проверяет систему отгрузок: если ваш авиазаказ "
+            "появился в системе и оборудование ожидает отправки — мы немедленно приступаем к обработке.\n\n"
+            "📦 Хочу оптовую партию — если вам требуется несколько единиц техники, просто свяжитесь с нами "
+            "напрямую для персонального обслуживания."
         ),
         "discount_title": "🎁 <b>Акции</b>\n\nАктивные скидки:\n\n",
         "discount_empty": "📭 Нет активных акций.",

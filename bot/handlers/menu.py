@@ -17,9 +17,27 @@ logger = logging.getLogger(__name__)
 router = Router(name="menu")
 
 MENU_TITLES = {
-    "zh": "📌 <b>主菜单</b>\n\n请选择您需要的服务：",
-    "en": "📌 <b>Main Menu</b>\n\nPlease select a service:",
-    "ru": "📌 <b>Главное меню</b>\n\nВыберите услугу:",
+    "zh": (
+        "请选择功能模块：\n\n"
+        "📦 莫斯科现货库存 — 仓库实时余量查询。\n"
+        "🛠️ 服务中心 — 维修进度跟踪以及和服务中心工程师直接对接。\n"
+        "🧑‍🤝‍🧑 A-BF 俱乐部 — 狩猎、战术、装备、自己人。\n\n"
+        "🔐 战略合作伙伴 — 请输入专属访问码。"
+    ),
+    "en": (
+        "Please choose a module:\n\n"
+        "📦 Moscow Stock — real-time warehouse availability.\n"
+        "🛠️ Service Center — repair tracking &amp; direct contact with service engineers.\n"
+        "🧑‍🤝‍🧑 A-BF Club — hunting, tactics, gear, community.\n\n"
+        "🔐 Strategic partners — enter your access code."
+    ),
+    "ru": (
+        "Выберите нужный раздел:\n\n"
+        "📦 Наличие в Москве — актуальные остатки со склада.\n"
+        "🛠️ Сервис-центр — отслеживание статуса ремонта и прямая связь с инженерами.\n"
+        "🧑‍🤝‍🧑 Клуб A-BF — охота, тактика, снаряжение, свои.\n\n"
+        "🔐 Для стратегических партнёров — введите код доступа."
+    ),
 }
 
 SETTINGS_TITLES = {

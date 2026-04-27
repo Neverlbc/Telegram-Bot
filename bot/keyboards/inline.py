@@ -79,21 +79,21 @@ def main_menu_keyboard(lang: str = "zh", club_link: str = "") -> InlineKeyboardM
     """主菜单键盘 — 3 个功能入口."""
     texts = {
         "zh": {
-            "inventory": "🔍 莫斯科现货查询",
-            "service_center": "🛠 A-BF 俄罗斯服务中心",
-            "club": "🌙 A-BF 昼夜俱乐部",
+            "inventory": "📦 莫斯科现货库存",
+            "service_center": "🛠️ 服务中心",
+            "club": "🧑‍🤝‍🧑 A-BF 俱乐部",
             "settings": "⚙️ 设置",
         },
         "en": {
-            "inventory": "🔍 Moscow Inventory",
-            "service_center": "🛠 A-BF Russia Service Center",
-            "club": "🌙 A-BF Day and Night Club",
+            "inventory": "📦 Moscow Stock",
+            "service_center": "🛠️ Service Center",
+            "club": "🧑‍🤝‍🧑 A-BF Club",
             "settings": "⚙️ Settings",
         },
         "ru": {
-            "inventory": "🔍 Наличие в Москве",
-            "service_center": "🛠 Сервисный центр A-BF",
-            "club": "🌙 A-BF Дневной и ночной клуб",
+            "inventory": "📦 Наличие в Москве",
+            "service_center": "🛠️ Сервис-центр",
+            "club": "🧑‍🤝‍🧑 Клуб A-BF",
             "settings": "⚙️ Настройки",
         },
     }
@@ -167,19 +167,19 @@ def service_center_menu_keyboard(lang: str = "zh", service_link: str = "") -> In
     """服务中心主菜单."""
     texts = {
         "zh": {
-            "info": "📄 服务中心说明",
-            "link": "🔗 服务中心入口链接",
-            "repair": "🔧 设备检修查询",
+            "info": "📋 服务中心说明介绍（含工作时间）",
+            "link": "🔗 服务中心入口链接（可订阅）",
+            "repair": "🔍 设备检修查询",
         },
         "en": {
-            "info": "📄 Service Center Info",
-            "link": "🔗 Service Center Link",
-            "repair": "🔧 Device Repair Query",
+            "info": "📋 Service Info & Working Hours",
+            "link": "🔗 Service Channel Link (Subscribe)",
+            "repair": "🔍 Repair Status Check",
         },
         "ru": {
-            "info": "📄 О сервисном центре",
-            "link": "🔗 Ссылка на сервисный центр",
-            "repair": "🔧 Запрос ремонта",
+            "info": "📋 Описание сервиса и режим работы",
+            "link": "🔗 Ссылка на сервисный канал (подписаться)",
+            "repair": "🔍 Проверить статус ремонта",
         },
     }
     t = texts.get(lang, texts["zh"])
@@ -208,27 +208,23 @@ def service_center_admin_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     """服务中心管理员后台键盘."""
     texts = {
         "zh": {
-            "notify": "📩 维修完成通知说明",
             "sn_list": "📋 维修记录列表",
             "sn_search": "🔎 查询设备序列号（SN）",
+            "notify": "📱 维修完成通知",
         },
         "en": {
-            "notify": "📩 Repair Completion Notifications",
-            "sn_list": "📋 Repair Records",
-            "sn_search": "🔎 Search Device SN",
+            "sn_list": "📋 Repair Record List",
+            "sn_search": "🔎 Search by Serial Number (S/N)",
+            "notify": "📱 Repair Completion Notification",
         },
         "ru": {
-            "notify": "📩 Уведомления о завершении ремонта",
             "sn_list": "📋 Список ремонтов",
-            "sn_search": "🔎 Поиск серийного номера (SN)",
+            "sn_search": "🔎 Поиск по серийному номеру (S/N)",
+            "notify": "📱 Уведомление о готовности ремонта",
         },
     }
     t = texts.get(lang, texts["zh"])
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text=t["notify"],
-        callback_data=ServiceCenterCallback(action="admin_menu").pack(),
-    ))
     builder.row(InlineKeyboardButton(
         text=t["sn_list"],
         callback_data=ServiceCenterCallback(action="sn_list").pack(),
@@ -236,6 +232,10 @@ def service_center_admin_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(
         text=t["sn_search"],
         callback_data=ServiceCenterCallback(action="sn_search").pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=t["notify"],
+        callback_data=ServiceCenterCallback(action="admin_menu").pack(),
     ))
     for row in nav_buttons("sc_menu", lang):
         builder.row(*row)
@@ -248,19 +248,19 @@ def vip_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
     """Vandych VIP 隐藏菜单."""
     texts = {
         "zh": {
-            "discount": "🎁 获取折扣",
+            "discount": "🏷️ 获取折扣",
             "shipping": "✈️ 支付空运",
             "wholesale": "📦 我需要批发",
         },
         "en": {
-            "discount": "🎁 Get Discount",
+            "discount": "🏷️ Get Discounts",
             "shipping": "✈️ Pay Air Freight",
             "wholesale": "📦 I Need Wholesale",
         },
         "ru": {
-            "discount": "🎁 Получить скидку",
+            "discount": "🏷️ Получить скидку",
             "shipping": "✈️ Оплатить авиадоставку",
-            "wholesale": "📦 Оптовый заказ",
+            "wholesale": "📦 Хочу оптовую партию",
         },
     }
     t = texts.get(lang, texts["zh"])

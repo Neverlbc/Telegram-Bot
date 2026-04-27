@@ -9,6 +9,7 @@ from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.config import settings
 from bot.keyboards.callbacks import LangCallback
 from bot.keyboards.inline import language_keyboard, main_menu_keyboard
 from bot.models.user import Language
@@ -18,18 +19,39 @@ router = Router(name="start")
 
 # 三语欢迎语
 WELCOME_TEXT = (
-    "👋 欢迎使用跨境电商客服机器人！\n"
-    "请选择您的语言。\n\n"
-    "👋 Welcome to Cross-border E-commerce Bot!\n"
-    "Please select your language.\n\n"
-    "👋 Добро пожаловать!\n"
-    "Пожалуйста, выберите язык."
+    "👋 欢迎使用官方 A-BF 助手机器人！\n\n"
+    "您的私人助理，A-BF。请选择您的首选语言：\n\n"
+    "我们随时为您服务。即使在黑暗中。\n\n"
+    "👋 Welcome to the official A-BF assistant robot!\n\n"
+    "Your personal assistant, A-BF. Please select your preferred language:\n\n"
+    "We're always at your service. Even in the dark.\n\n"
+    "👋 Добро пожаловать в официальный робот-помощник A-BF!\n\n"
+    "Ваш персональный помощник A-BF. Пожалуйста, выберите предпочитаемый язык:\n\n"
+    "Мы всегда к вашим услугам. Даже в темноте."
 )
 
 MENU_TITLES = {
-    "zh": "📌 主菜单\n\n请选择您需要的服务：",
-    "en": "📌 Main Menu\n\nPlease select a service:",
-    "ru": "📌 Главное меню\n\nВыберите услугу:",
+    "zh": (
+        "请选择功能模块：\n\n"
+        "📦 莫斯科现货库存 — 仓库实时余量查询。\n"
+        "🛠️ 服务中心 — 维修进度跟踪以及和服务中心工程师直接对接。\n"
+        "🧑‍🤝‍🧑 A-BF 俱乐部 — 狩猎、战术、装备、自己人。\n\n"
+        "🔐 战略合作伙伴 — 请输入专属访问码。"
+    ),
+    "en": (
+        "Please choose a module:\n\n"
+        "📦 Moscow Stock — real-time warehouse availability.\n"
+        "🛠️ Service Center — repair tracking &amp; direct contact with service engineers.\n"
+        "🧑‍🤝‍🧑 A-BF Club — hunting, tactics, gear, community.\n\n"
+        "🔐 Strategic partners — enter your access code."
+    ),
+    "ru": (
+        "Выберите нужный раздел:\n\n"
+        "📦 Наличие в Москве — актуальные остатки со склада.\n"
+        "🛠️ Сервис-центр — отслеживание статуса ремонта и прямая связь с инженерами.\n"
+        "🧑‍🤝‍🧑 Клуб A-BF — охота, тактика, снаряжение, свои.\n\n"
+        "🔐 Для стратегических партнёров — введите код доступа."
+    ),
 }
 
 
@@ -85,7 +107,7 @@ async def on_select_language(
     # 编辑消息为主菜单
     await callback.message.edit_text(
         MENU_TITLES.get(lang_code, MENU_TITLES["zh"]),
-        reply_markup=main_menu_keyboard(lang_code),
+        reply_markup=main_menu_keyboard(lang_code, settings.club_tg_link),
     )
     await callback.answer()
 

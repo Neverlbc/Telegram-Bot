@@ -41,7 +41,12 @@ router = Router(name="service_center")
 
 TEXTS: dict[str, dict[str, str]] = {
     "zh": {
-        "menu_title": "🛠 <b>A-BF 俄罗斯服务中心</b>\n\n请选择服务：",
+        "menu_title": (
+            "🛠️ A-BF 俄罗斯服务中心\n\n"
+            "📋 服务中心说明介绍（含工作时间）\n\n"
+            "🔗 服务中心入口链接（可订阅）\n\n"
+            "🔍 设备检修查询"
+        ),
         "info_text": (
             "👋您好，这里是俄罗斯A-BF服务中心！\n\n"
             "我们接受从本公司购买的产品进行维修和检测。\n\n"
@@ -78,7 +83,14 @@ TEXTS: dict[str, dict[str, str]] = {
         "notify_watch": "✅ 已订阅状态更新，有变更时将自动通知您。",
         "enter_admin_pw": "🔐 请输入管理员密码：",
         "wrong_admin_pw": "❌ 密码错误。",
-        "admin_title": "🔐 <b>服务中心管理后台</b>\n\n请选择操作：",
+        "admin_title": (
+            "👁️ 您好，欢迎来到服务中心的隐藏菜单。\n\n"
+            "当前可用功能：\n\n"
+            "📋 维修记录列表 — 近期维修记录清单，方便快速查阅。\n"
+            "🔍 查询设备序列号（S/N）— 验证设备是否来自我司。\n\n"
+            "📱 维修完成通知 — 该功能需在数据库中配置终端用户手机号，暂未开放。\n\n"
+            "如需其他协助，请直接联系 A-BF 服务中心管理团队。"
+        ),
         "sn_list_title": "📋 <b>SN 表（全部检修记录）</b>\n\n",
         "sn_list_empty": "📭 暂无检修记录。",
         "not_configured": "⚠️ 服务中心 Google Sheet 未配置，请联系管理员。",
@@ -86,7 +98,12 @@ TEXTS: dict[str, dict[str, str]] = {
         "loading_err": "❌ 查询失败，请稍后重试。",
     },
     "en": {
-        "menu_title": "🛠 <b>A-BF Russia Service Center</b>\n\nSelect a service:",
+        "menu_title": (
+            "🛠️ A-BF Russia Service Center\n\n"
+            "📋 Service Info &amp; Working Hours\n\n"
+            "🔗 Service Channel Link (Subscribe)\n\n"
+            "🔍 Repair Status Check"
+        ),
         "info_text": (
             "👋Hello, this is the Russian A-BF Service Center!\n\n"
             "We accept products purchased from our company for repair and inspection.\n\n"
@@ -127,7 +144,15 @@ TEXTS: dict[str, dict[str, str]] = {
         "notify_watch": "✅ Subscribed to updates — you'll be notified on any change.",
         "enter_admin_pw": "🔐 Enter admin password:",
         "wrong_admin_pw": "❌ Incorrect password.",
-        "admin_title": "🔐 <b>Service Center Admin</b>\n\nSelect an action:",
+        "admin_title": (
+            "👁️ Welcome to the Service Center hidden menu.\n\n"
+            "Available functions:\n\n"
+            "📋 Repair Record List — recent repair case log, easy to browse.\n"
+            "🔍 Search by Serial Number (S/N) — verify if the device comes from our company.\n\n"
+            "📱 Repair Completion Notification — temporarily unavailable; requires client phone numbers "
+            "configured in the database.\n\n"
+            "For further assistance, please contact the A-BF Service Center management team directly."
+        ),
         "sn_list_title": "📋 <b>SN List (all repair records)</b>\n\n",
         "sn_list_empty": "📭 No repair records found.",
         "not_configured": "⚠️ Service center sheet not configured. Contact admin.",
@@ -135,7 +160,12 @@ TEXTS: dict[str, dict[str, str]] = {
         "loading_err": "❌ Query failed. Please try again later.",
     },
     "ru": {
-        "menu_title": "🛠 <b>Сервисный центр A-BF</b>\n\nВыберите услугу:",
+        "menu_title": (
+            "🛠️ A-BF Russia Service Center\n\n"
+            "📋 Описание сервиса и режим работы\n\n"
+            "🔗 Ссылка на сервисный канал (подписаться)\n\n"
+            "🔍 Проверить статус ремонта"
+        ),
         "info_text": (
             "👋Здравствуйте, это Российский сервисный центр А-BF！\n\n"
             "Мы принимаем к ремонту и осмотру продукцию, приобретенную у нашей компании.\n\n"
@@ -178,7 +208,15 @@ TEXTS: dict[str, dict[str, str]] = {
         "notify_watch": "✅ Вы подписаны на обновления — уведомим при изменении.",
         "enter_admin_pw": "🔐 Введите пароль администратора:",
         "wrong_admin_pw": "❌ Неверный пароль.",
-        "admin_title": "🔐 <b>Панель администратора</b>\n\nВыберите действие:",
+        "admin_title": (
+            "👁️ Добро пожаловать в скрытое меню сервисного центра.\n\n"
+            "Доступные функции:\n\n"
+            "📋 Список ремонтов — перечень недавних обращений для быстрого просмотра.\n"
+            "🔍 Поиск по серийному номеру (S/N) — проверка принадлежности прибора нашей компании.\n\n"
+            "📱 Уведомление о готовности ремонта — услуга временно недоступна, требуется настройка базы "
+            "номеров клиентов.\n\n"
+            "По другим вопросам обращайтесь напрямую к команде управления сервисного центра A-BF."
+        ),
         "sn_list_title": "📋 <b>Список SN (все записи о ремонте)</b>\n\n",
         "sn_list_empty": "📭 Записей о ремонте нет.",
         "not_configured": "⚠️ Таблица сервисного центра не настроена.",
@@ -341,9 +379,15 @@ async def on_admin_notify_info(callback: CallbackQuery, lang: str = "zh") -> Non
     if not callback.message:
         return
     info = {
-        "zh": "📩 <b>维修完成通知</b>\n\n当管理员在 Google 表格中填写「回寄CDEK单号」时，系统将自动通知对应客户。\n\n无需手动操作，状态监听后台每 5 分钟轮询一次。",
-        "en": "📩 <b>Repair Completion Notifications</b>\n\nWhen the admin fills in the return CDEK number in the Google Sheet, the customer is notified automatically.\n\nNo manual action needed — the monitor checks every 5 minutes.",
-        "ru": "📩 <b>Уведомление о завершении</b>\n\nКогда администратор заполнит номер CDEK возврата в таблице, клиент получит уведомление автоматически.\n\nМониторинг каждые 5 минут.",
+        "zh": "📱 <b>维修完成通知</b>\n\n该功能需在数据库中配置终端用户手机号，暂未开放。",
+        "en": (
+            "📱 <b>Repair Completion Notification</b>\n\n"
+            "Temporarily unavailable; requires client phone numbers configured in the database."
+        ),
+        "ru": (
+            "📱 <b>Уведомление о готовности ремонта</b>\n\n"
+            "Услуга временно недоступна, требуется настройка базы номеров клиентов."
+        ),
     }.get(lang, "")
     builder = InlineKeyboardBuilder()
     for row in nav_buttons("sc_admin", lang):

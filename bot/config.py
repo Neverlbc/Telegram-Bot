@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     vandych_shipping_discount_code: str = Field("", description="Vandych 空运支付折扣码")
 
     # ── 密码入口 ──────────────────────────────────────
-    vip_inventory_password: str = Field("ABFVIP2026", description="VIP 现货查询密码")
+    vip_inventory_password: str = Field("ABFVIP2026Hunter", description="VIP 现货查询密码")
     service_admin_password: str = Field("service2026adminXXA", description="服务中心管理员密码")
     vandych_password: str = Field("ABFVandych2026XXA", description="Vandych VIP 隐藏菜单密码")
 

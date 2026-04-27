@@ -30,8 +30,19 @@ router = Router(name="inventory")
 
 TEXTS: dict[str, dict[str, str]] = {
     "zh": {
-        "menu_title": "🔍 <b>莫斯科现货查询</b>\n\n请选择查询方式：",
+        "menu_title": (
+            "🔍 您好，此模块的主要功能是查询我们莫斯科仓库的产品库存情况（仅包含部分品牌）。\n\n"
+            "请选择搜索方式："
+        ),
         "category_title": "📂 请选择品类：",
+        "vip_category_title": (
+            "👁️ 欢迎进入 VIP 专属隐藏菜单。\n\n"
+            "目前为您开放：完整版品牌及现货库存清单。\n\n"
+            "库存展示逻辑：\n"
+            "莫斯科现货 - 已下单待发货 = 您看到的数字。\n"
+            "所见即所得，每一件都是真实可用库存。\n\n"
+            "📁 请选择品类："
+        ),
         "brand_title": "🏷 <b>请选择品牌</b>\n\n点击品牌查看对应库存：",
         "quick_title_public": "⚡ <b>快速展示 · 当前有货</b>\n\n",
         "quick_title_vip": "⚡ <b>快速展示 · 当前有货</b>\n\n",
@@ -48,8 +59,20 @@ TEXTS: dict[str, dict[str, str]] = {
         "not_configured": "⚠️ 库存服务暂未配置，请稍后再试。",
     },
     "en": {
-        "menu_title": "🔍 <b>Moscow Inventory Query</b>\n\nSelect query type:",
+        "menu_title": (
+            "🔍 Hello, the main function of this module is to check product availability in our Moscow warehouse "
+            "(only certain brands are included).\n\n"
+            "Please select a search method:"
+        ),
         "category_title": "📂 Select category:",
+        "vip_category_title": (
+            "👁️ Welcome to the VIP hidden menu.\n\n"
+            "Currently unlocked for you: full brand inventory list.\n\n"
+            "How stock numbers work:\n"
+            "Moscow physical stock - orders awaiting shipment = what you see.\n"
+            "What you see is what’s truly available.\n\n"
+            "📁 Select category:"
+        ),
         "brand_title": "🏷 <b>Select a brand</b>\n\nTap a brand to view inventory:",
         "quick_title_public": "⚡ <b>Quick View · In Stock</b>\n\n",
         "quick_title_vip": "⚡ <b>Quick View · In Stock</b>\n\n",
@@ -66,8 +89,20 @@ TEXTS: dict[str, dict[str, str]] = {
         "not_configured": "⚠️ Inventory service not configured yet.",
     },
     "ru": {
-        "menu_title": "🔍 <b>Наличие в Москве</b>\n\nВыберите тип запроса:",
+        "menu_title": (
+            "🔍 Здравствуйте, основная функция этого модуля — проверка наличия товаров на нашем московском складе "
+            "(включены только некоторые бренды).\n\n"
+            "Пожалуйста, выберите способ поиска:"
+        ),
         "category_title": "📂 Выберите категорию:",
+        "vip_category_title": (
+            "👁️ Добро пожаловать в VIP-меню.\n\n"
+            "Для вас открыт доступ к полному списку брендов и складских остатков в Москве.\n\n"
+            "Как формируются остатки:\n"
+            "Товар на складе минус уже заказанное, ожидающее отправки = цифра на экране.\n"
+            "Всё, что вы видите, — реально доступный товар.\n\n"
+            "📁 Выберите категорию:"
+        ),
         "brand_title": "🏷 <b>Выберите бренд</b>\n\nНажмите бренд, чтобы посмотреть наличие:",
         "quick_title_public": "⚡ <b>Быстрый просмотр · В наличии</b>\n\n",
         "quick_title_vip": "⚡ <b>Быстрый просмотр · В наличии</b>\n\n",
@@ -325,7 +360,7 @@ async def on_inventory_categories(
     if not callback.message:
         return
     await callback.message.edit_text(
-        _t(lang, "category_title"),
+        _t(lang, "vip_category_title") if callback_data.vip else _t(lang, "category_title"),
         reply_markup=inventory_category_keyboard(lang, vip=callback_data.vip),
     )
     await callback.answer()
@@ -335,7 +370,7 @@ async def on_inventory_categories(
 async def on_vip_password_text(message: Message, lang: str = "zh") -> None:
     """VIP 密码文本触发（无按钮，直接发密码即可进入 VIP 查询）."""
     await message.answer(
-        _t(lang, "category_title"),
+        _t(lang, "vip_category_title"),
         reply_markup=inventory_category_keyboard(lang, vip=True),
     )
 
