@@ -18,6 +18,72 @@ from bot.models.user import User
 
 logger = logging.getLogger(__name__)
 
+MODULE_LABELS = {
+    "menu": "主菜单",
+    "hidden_access": "隐藏入口",
+    "inventory": "莫斯科现货库存",
+    "language": "语言切换",
+    "navigation": "导航",
+    "service_center": "A-BF俄罗斯服务中心",
+    "vandych": "Vandych的帐篷",
+    "command": "命令",
+    "message": "普通消息",
+    "callback": "按钮点击",
+    "unknown": "未知模块",
+}
+
+LANGUAGE_LABELS = {
+    "zh": "中文",
+    "en": "英文",
+    "ru": "俄文",
+    "unknown": "未知语言",
+}
+
+ACTION_LABELS = {
+    "command.start": "启动 Bot",
+    "command.menu": "打开主菜单",
+    "command.cancel": "取消当前操作",
+    "command.lang": "语言设置命令",
+    "command.help": "查看帮助",
+    "hidden_access.vip_inventory": "激活 VIP 库存隐藏菜单",
+    "hidden_access.service_admin": "激活服务中心隐藏菜单",
+    "hidden_access.vandych": "激活 Vandych 专属菜单",
+    "inventory.menu": "进入莫斯科现货查询",
+    "inventory.public_query": "普通库存查询",
+    "inventory.categories": "查看库存分类",
+    "inventory.category": "进入户外库存分类",
+    "inventory.quick": "快速展示有库存商品",
+    "inventory.brand": "按品牌查看库存",
+    "language.zh": "切换语言：中文",
+    "language.en": "切换语言：英文",
+    "language.ru": "切换语言：俄文",
+    "menu.settings": "进入设置",
+    "menu.setting_lang": "设置中切换语言",
+    "navigation.home": "返回主菜单",
+    "navigation.back": "返回上级菜单",
+    "service_center.menu": "进入服务中心",
+    "service_center.info": "查看服务中心说明",
+    "service_center.link": "打开服务中心频道链接",
+    "service_center.repair": "设备检修查询",
+    "service_center.admin_home": "进入服务中心隐藏后台",
+    "service_center.admin_menu": "查看服务中心通知说明",
+    "service_center.sn_list": "查看 SN 列表",
+    "service_center.sn_search": "查询 SN 记录",
+    "vandych.menu": "进入 Vandych 专属菜单",
+    "vandych.discount": "获取折扣码和链接",
+    "vandych.sku_select": "查看指定 SKU 折扣",
+    "vandych.shipping": "查看空运支付链接",
+    "vandych.wholesale": "提交批发需求",
+    "message.text_message": "普通文本消息",
+    "inventory.text_input": "库存模块文本输入",
+    "service_center.text_input": "服务中心查询输入",
+    "vandych.text_input": "Vandych 批发需求输入",
+}
+
+EVENT_NAME_LABELS = {
+    "hidden_access.password_success": "隐藏菜单密码验证成功",
+}
+
 DASHBOARD_HTML = r"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -335,6 +401,37 @@ def _event_outcome(event_data: Any) -> str | None:
     return None
 
 
+def _module_label(module: Any) -> str:
+    code = str(module or "unknown")
+    return MODULE_LABELS.get(code, code)
+
+
+def _language_label(language: Any) -> str:
+    code = str(language or "unknown")
+    return LANGUAGE_LABELS.get(code, code)
+
+
+def _action_label(module: Any, action: Any, event_name: Any = None, event_data: Any = None) -> str:
+    module_code = str(module or "unknown")
+    action_code = str(action or "unknown")
+    key = f"{module_code}.{action_code}"
+
+    if module_code == "hidden_access" and isinstance(event_data, dict):
+        kind = event_data.get("kind")
+        if kind:
+            key = f"hidden_access.{kind}"
+
+    if key in ACTION_LABELS:
+        return ACTION_LABELS[key]
+
+    event_key = str(event_name or "")
+    if event_key in EVENT_NAME_LABELS:
+        return EVENT_NAME_LABELS[event_key]
+
+    module_label = _module_label(module_code)
+    return f"{module_label}：{action_code}"
+
+
 async def index(_: web.Request) -> web.Response:
     return web.Response(text=DASHBOARD_HTML, content_type="text/html")
 
@@ -380,8 +477,8 @@ async def summary(request: web.Request) -> web.Response:
             )
         )
 
-        modules = await _count_by(session, AnalyticsEvent.module, since, 12)
-        languages = await _count_by(session, AnalyticsEvent.language, since, 8)
+        modules = await _count_by(session, AnalyticsEvent.module, since, 12, _module_label)
+        languages = await _count_by(session, AnalyticsEvent.language, since, 8, _language_label)
         actions = await _top_actions(session, since)
         daily = await _daily(session, since, days)
         top_users = await _top_users(session, since)
@@ -407,7 +504,13 @@ async def summary(request: web.Request) -> web.Response:
     )
 
 
-async def _count_by(session: Any, column: Any, since: datetime, limit: int) -> list[dict[str, Any]]:
+async def _count_by(
+    session: Any,
+    column: Any,
+    since: datetime,
+    limit: int,
+    label_fn: Any | None = None,
+) -> list[dict[str, Any]]:
     name = func.coalesce(column, "unknown").label("name")
     count = func.count(AnalyticsEvent.id).label("count")
     result = await session.execute(
@@ -417,7 +520,15 @@ async def _count_by(session: Any, column: Any, since: datetime, limit: int) -> l
         .order_by(count.desc())
         .limit(limit)
     )
-    return [{"name": str(row["name"]), "count": int(row["count"])} for row in result.mappings()]
+    rows: list[dict[str, Any]] = []
+    for row in result.mappings():
+        code = str(row["name"])
+        rows.append({
+            "name": label_fn(code) if label_fn else code,
+            "code": code,
+            "count": int(row["count"]),
+        })
+    return rows
 
 
 async def _top_actions(session: Any, since: datetime) -> list[dict[str, Any]]:
@@ -431,8 +542,11 @@ async def _top_actions(session: Any, since: datetime) -> list[dict[str, Any]]:
     )
     rows: list[dict[str, Any]] = []
     for module, action, event_count in result:
+        module_code = str(module or "unknown")
+        action_code = str(action or "unknown")
         rows.append({
-            "name": f"{module or 'unknown'}.{action or 'unknown'}",
+            "name": _action_label(module_code, action_code),
+            "code": f"{module_code}.{action_code}",
             "count": int(event_count),
         })
     return rows
@@ -504,6 +618,8 @@ async def _recent_events(session: Any) -> list[dict[str, Any]]:
         select(
             AnalyticsEvent.created_at,
             AnalyticsEvent.telegram_id,
+            AnalyticsEvent.module,
+            AnalyticsEvent.action,
             AnalyticsEvent.event_name,
             AnalyticsEvent.event_data,
         )
@@ -514,7 +630,13 @@ async def _recent_events(session: Any) -> list[dict[str, Any]]:
         {
             "created_at": _dt(row["created_at"]),
             "telegram_id": row["telegram_id"],
-            "event_name": row["event_name"],
+            "event_name": _action_label(
+                row["module"],
+                row["action"],
+                row["event_name"],
+                row["event_data"],
+            ),
+            "event_code": row["event_name"],
             "outcome": _event_outcome(row["event_data"]),
         }
         for row in result.mappings()
