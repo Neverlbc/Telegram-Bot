@@ -20,6 +20,7 @@ from bot.models.faq import FaqItem  # noqa: F401
 from bot.models.order import WholesaleOrder, AftersaleQuery, LogisticsQuery  # noqa: F401
 from bot.models.device import DeviceSerialQuery, DeviceTicket  # noqa: F401
 from bot.models.ticket import SupportTicket, SupportMessage  # noqa: F401
+from bot.models.analytics import AnalyticsEvent  # noqa: F401
 
 # Alembic Config 对象
 config = context.config

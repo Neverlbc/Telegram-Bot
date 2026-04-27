@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     log_level: str = Field("INFO")
     log_format: str = Field("json", description="日志格式: json / console")
 
+    # ── Analytics dashboard ──────────────────────────
+    analytics_dashboard_host: str = Field("0.0.0.0", description="Analytics dashboard bind host")
+    analytics_dashboard_port: int = Field(8088, description="Analytics dashboard HTTP port")
+    analytics_dashboard_token: str = Field("", description="Optional dashboard access token")
+
     @property
     def admin_id_list(self) -> list[int]:
         """解析逗号分隔的管理员 ID 字符串为整数列表."""

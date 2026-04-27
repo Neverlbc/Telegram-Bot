@@ -72,6 +72,17 @@ services:
     networks:
       - bot-network
 
+  analytics-dashboard:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: python -m bot.analytics_dashboard
+    ports:
+      - "${ANALYTICS_DASHBOARD_PORT:-8088}:${ANALYTICS_DASHBOARD_PORT:-8088}"
+    networks:
+      - bot-network
+
 volumes:
   redis_data:
 

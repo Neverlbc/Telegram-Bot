@@ -81,6 +81,11 @@ def create_dispatcher(redis: Redis | None = None) -> Dispatcher:  # type: ignore
 
     dp.message.middleware(I18nMiddleware())
     dp.callback_query.middleware(I18nMiddleware())
+    if settings.mysql_password and settings.mysql_password != "your_password_here":
+        from bot.middlewares.analytics import AnalyticsMiddleware
+        dp.message.middleware(AnalyticsMiddleware())
+        dp.callback_query.middleware(AnalyticsMiddleware())
+        logger.info("Analytics middleware enabled")
 
     # ── 注册路由（顺序很重要：隐藏密码入口必须先于各功能 FSM 文本输入）──
     dp.include_router(start.router)
