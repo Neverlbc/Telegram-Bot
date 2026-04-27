@@ -19,7 +19,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.config import settings
 from bot.keyboards.callbacks import InventoryCallback, NavCallback
 from bot.keyboards.inline import inventory_category_keyboard, inventory_menu_keyboard
-from bot.services.hidden_access import MENU_VIP_INVENTORY, has_hidden_access
+from bot.services.hidden_access import MENU_VIP_INVENTORY, clear_state_keep_hidden_access, has_hidden_access
 from bot.services.outdoor_sheets import OutdoorItem, get_outdoor_inventory
 
 logger = logging.getLogger(__name__)
@@ -356,10 +356,11 @@ async def on_inventory_menu(
     if not callback.message:
         return
     if state:
-        await state.clear()
+        await clear_state_keep_hidden_access(state)
+    vip_unlocked = bool(state and await has_hidden_access(state, MENU_VIP_INVENTORY))
     await callback.message.edit_text(
         _t(lang, "menu_title"),
-        reply_markup=inventory_menu_keyboard(lang),
+        reply_markup=inventory_menu_keyboard(lang, vip_unlocked=vip_unlocked),
     )
     await callback.answer()
 

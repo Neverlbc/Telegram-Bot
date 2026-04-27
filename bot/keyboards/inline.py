@@ -75,26 +75,41 @@ def settings_menu_keyboard(lang: str = "zh", show_profile: bool = False) -> Inli
 
 # ── 主菜单（新版 3 按钮）────────────────────────────
 
-def main_menu_keyboard(lang: str = "zh", club_link: str = "") -> InlineKeyboardMarkup:
+def main_menu_keyboard(
+    lang: str = "zh",
+    club_link: str = "",
+    vip_inventory_unlocked: bool = False,
+    service_admin_unlocked: bool = False,
+    vandych_unlocked: bool = False,
+) -> InlineKeyboardMarkup:
     """主菜单键盘 — 3 个功能入口."""
     texts = {
         "zh": {
             "inventory": "📦 莫斯科现货库存",
-            "service_center": "🛠️ 服务中心",
-            "club": "🧑‍🤝‍🧑 A-BF 俱乐部",
+            "service_center": "🛠️ A-BF俄罗斯服务中心",
+            "club": "🧑‍🤝‍🧑 A-BF昼夜俱乐部",
             "settings": "⚙️ 设置",
+            "vip_inventory": "⭐ VIP 专属隐藏菜单",
+            "service_admin": "👁️ 服务中心隐藏菜单",
+            "vandych": "🏕️ 【Vandych的帐篷】专属菜单",
         },
         "en": {
             "inventory": "📦 Moscow Stock",
-            "service_center": "🛠️ Service Center",
-            "club": "🧑‍🤝‍🧑 A-BF Club",
+            "service_center": "🛠️ A-BF Russia Service Center",
+            "club": "🧑‍🤝‍🧑 A-BF Day and Night Club",
             "settings": "⚙️ Settings",
+            "vip_inventory": "⭐ VIP Hidden Stock Menu",
+            "service_admin": "👁️ Service Center Hidden Menu",
+            "vandych": "🏕️ Vandych's Tent",
         },
         "ru": {
             "inventory": "📦 Наличие в Москве",
-            "service_center": "🛠️ Сервис-центр",
-            "club": "🧑‍🤝‍🧑 Клуб A-BF",
+            "service_center": "🛠️ A-BF Россия Сервисный центр",
+            "club": "🧑‍🤝‍🧑 A-BF Дневной и ночной клуб",
             "settings": "⚙️ Настройки",
+            "vip_inventory": "⭐ VIP-меню наличия",
+            "service_admin": "👁️ Скрытое меню сервиса",
+            "vandych": "🏕️ Палатка Вандыча",
         },
     }
     t = texts.get(lang, texts["zh"])
@@ -107,6 +122,21 @@ def main_menu_keyboard(lang: str = "zh", club_link: str = "") -> InlineKeyboardM
         text=t["service_center"],
         callback_data=ServiceCenterCallback(action="menu").pack(),
     ))
+    if vip_inventory_unlocked:
+        builder.row(InlineKeyboardButton(
+            text=t["vip_inventory"],
+            callback_data=InventoryCallback(action="categories", vip=True).pack(),
+        ))
+    if service_admin_unlocked:
+        builder.row(InlineKeyboardButton(
+            text=t["service_admin"],
+            callback_data=ServiceCenterCallback(action="admin_home").pack(),
+        ))
+    if vandych_unlocked:
+        builder.row(InlineKeyboardButton(
+            text=t["vandych"],
+            callback_data=VipCallback(action="menu").pack(),
+        ))
     if club_link:
         builder.row(InlineKeyboardButton(text=t["club"], url=club_link))
     else:
@@ -124,12 +154,12 @@ def main_menu_keyboard(lang: str = "zh", club_link: str = "") -> InlineKeyboardM
 
 # ── 莫斯科现货查询 ────────────────────────────────────
 
-def inventory_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
+def inventory_menu_keyboard(lang: str = "zh", vip_unlocked: bool = False) -> InlineKeyboardMarkup:
     """莫斯科现货查询 — 普通查询（VIP 查询由文本密码触发）."""
     texts = {
-        "zh": {"public": "📋 普通查询"},
-        "en": {"public": "📋 Public Query"},
-        "ru": {"public": "📋 Обычный запрос"},
+        "zh": {"public": "📋 普通查询", "vip": "⭐ VIP 专属隐藏菜单"},
+        "en": {"public": "📋 Public Query", "vip": "⭐ VIP Hidden Stock Menu"},
+        "ru": {"public": "📋 Обычный запрос", "vip": "⭐ VIP-меню наличия"},
     }
     t = texts.get(lang, texts["zh"])
     builder = InlineKeyboardBuilder()
@@ -137,6 +167,11 @@ def inventory_menu_keyboard(lang: str = "zh") -> InlineKeyboardMarkup:
         text=t["public"],
         callback_data=InventoryCallback(action="public_query").pack(),
     ))
+    if vip_unlocked:
+        builder.row(InlineKeyboardButton(
+            text=t["vip"],
+            callback_data=InventoryCallback(action="categories", vip=True).pack(),
+        ))
     for row in nav_buttons("menu", lang):
         builder.row(*row)
     return builder.as_markup()
@@ -163,23 +198,30 @@ def inventory_category_keyboard(lang: str = "zh", vip: bool = False) -> InlineKe
 
 # ── A-BF 俄罗斯服务中心 ───────────────────────────────
 
-def service_center_menu_keyboard(lang: str = "zh", service_link: str = "") -> InlineKeyboardMarkup:
+def service_center_menu_keyboard(
+    lang: str = "zh",
+    service_link: str = "",
+    admin_unlocked: bool = False,
+) -> InlineKeyboardMarkup:
     """服务中心主菜单."""
     texts = {
         "zh": {
             "info": "📋 服务中心说明介绍（含工作时间）",
             "link": "🔗 服务中心入口链接（可订阅）",
             "repair": "🔍 设备检修查询",
+            "admin": "👁️ 服务中心隐藏菜单",
         },
         "en": {
             "info": "📋 Service Info & Working Hours",
             "link": "🔗 Service Channel Link (Subscribe)",
             "repair": "🔍 Repair Status Check",
+            "admin": "👁️ Service Center Hidden Menu",
         },
         "ru": {
             "info": "📋 Описание сервиса и режим работы",
             "link": "🔗 Ссылка на сервисный канал (подписаться)",
             "repair": "🔍 Проверить статус ремонта",
+            "admin": "👁️ Скрытое меню сервиса",
         },
     }
     t = texts.get(lang, texts["zh"])
@@ -199,6 +241,11 @@ def service_center_menu_keyboard(lang: str = "zh", service_link: str = "") -> In
         text=t["repair"],
         callback_data=ServiceCenterCallback(action="repair").pack(),
     ))
+    if admin_unlocked:
+        builder.row(InlineKeyboardButton(
+            text=t["admin"],
+            callback_data=ServiceCenterCallback(action="admin_home").pack(),
+        ))
     for row in nav_buttons("menu", lang):
         builder.row(*row)
     return builder.as_markup()

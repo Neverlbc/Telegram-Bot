@@ -45,7 +45,7 @@ router = Router(name="service_center")
 TEXTS: dict[str, dict[str, str]] = {
     "zh": {
         "menu_title": (
-            "🛠️ A-BF 俄罗斯服务中心\n\n"
+            "🛠️ A-BF俄罗斯服务中心\n\n"
             "📋 服务中心说明介绍（含工作时间）\n\n"
             "🔗 服务中心入口链接（可订阅）\n\n"
             "🔍 设备检修查询"
@@ -166,7 +166,7 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "ru": {
         "menu_title": (
-            "🛠️ A-BF Russia Service Center\n\n"
+            "🛠️ A-BF Россия Сервисный центр\n\n"
             "📋 Описание сервиса и режим работы\n\n"
             "🔗 Ссылка на сервисный канал (подписаться)\n\n"
             "🔍 Проверить статус ремонта"
@@ -270,10 +270,15 @@ async def on_sc_menu(
     if not callback.message:
         return
     if state:
-        await state.clear()
+        await clear_state_keep_hidden_access(state)
+    admin_unlocked = bool(state and await has_hidden_access(state, MENU_SERVICE_ADMIN))
     await callback.message.edit_text(
         _t(lang, "menu_title"),
-        reply_markup=service_center_menu_keyboard(lang, settings.service_center_tg_link),
+        reply_markup=service_center_menu_keyboard(
+            lang,
+            settings.service_center_tg_link,
+            admin_unlocked=admin_unlocked,
+        ),
     )
     await callback.answer()
 
@@ -416,6 +421,23 @@ async def on_admin_notify_info(
     await callback.answer()
 
 
+@router.callback_query(ServiceCenterCallback.filter(F.action == "admin_home"))
+async def on_admin_home(
+    callback: CallbackQuery,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    if not await _ensure_admin_access(callback, state, lang):
+        return
+    await callback.message.edit_text(
+        _t(lang, "admin_title"),
+        reply_markup=service_center_admin_keyboard(lang),
+    )
+    await callback.answer()
+
+
 @router.callback_query(ServiceCenterCallback.filter(F.action == "sn_list"))
 async def on_sn_list(
     callback: CallbackQuery,
@@ -531,13 +553,17 @@ async def on_sn_query_input(
     await message.answer(text, reply_markup=builder.as_markup())
 
 
-async def show_sc_menu(callback: CallbackQuery, lang: str) -> None:
+async def show_sc_menu(callback: CallbackQuery, lang: str, admin_unlocked: bool = False) -> None:
     """供 menu.py NavCallback 路由调用，显示服务中心菜单."""
     if not callback.message:
         return
     await callback.message.edit_text(
         _t(lang, "menu_title"),
-        reply_markup=service_center_menu_keyboard(lang, settings.service_center_tg_link),
+        reply_markup=service_center_menu_keyboard(
+            lang,
+            settings.service_center_tg_link,
+            admin_unlocked=admin_unlocked,
+        ),
     )
 
 

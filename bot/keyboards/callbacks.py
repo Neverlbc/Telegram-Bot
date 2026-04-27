@@ -84,7 +84,7 @@ class InventoryCallback(CallbackData, prefix="inv"):
 class ServiceCenterCallback(CallbackData, prefix="sc"):
     """A-BF 俄罗斯服务中心."""
 
-    action: str  # menu / info / link / repair / admin_enter / admin_menu / sn_list
+    action: str  # menu / info / link / repair / admin_home / admin_menu / sn_list
     cdek_no: str = ""
 
 

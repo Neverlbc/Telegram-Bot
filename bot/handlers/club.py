@@ -1,4 +1,4 @@
-"""A-BF 晨夜俱乐部 — 跳转 TG 社群链接."""
+"""A-BF 昼夜俱乐部 — 跳转 TG 社群链接."""
 
 from __future__ import annotations
 
@@ -16,17 +16,17 @@ router = Router(name="club")
 
 TEXTS: dict[str, dict[str, str]] = {
     "zh": {
-        "text": "🌙 <b>A-BF 晨夜俱乐部</b>\n\n点击下方按钮加入俱乐部交流群：",
+        "text": "🌙 <b>A-BF昼夜俱乐部</b>\n\n点击下方按钮加入俱乐部交流群：",
         "btn": "🔗 进入俱乐部",
         "not_set": "⚠️ 俱乐部链接暂未配置，请联系管理员。",
     },
     "en": {
-        "text": "🌙 <b>A-BF Night Club</b>\n\nClick below to join the club community:",
+        "text": "🌙 <b>A-BF Day and Night Club</b>\n\nClick below to join the club community:",
         "btn": "🔗 Join Club",
         "not_set": "⚠️ Club link not configured yet.",
     },
     "ru": {
-        "text": "🌙 <b>Клуб A-BF</b>\n\nНажмите ниже, чтобы присоединиться к клубному сообществу:",
+        "text": "🌙 <b>A-BF Дневной и ночной клуб</b>\n\nНажмите ниже, чтобы присоединиться к клубному сообществу:",
         "btn": "🔗 Вступить в клуб",
         "not_set": "⚠️ Ссылка на клуб не настроена.",
     },
