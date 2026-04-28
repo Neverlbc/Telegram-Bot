@@ -571,19 +571,6 @@ def _price_table_column_labels(lang: str) -> dict[str, str]:
     }
 
 
-def _price_table_columns(lang: str, tier: str) -> list[tuple[str, str, int, str]]:
-    labels = _price_table_column_labels(lang)
-    columns: list[tuple[str, str, int, str]] = [("sku", labels["sku"], 14, "left")]
-    for currency_key in inventory_price_currency_keys(tier):
-        cap = 8 if currency_key == "usd" else 10
-        columns.append((currency_key, labels[currency_key], cap, "right"))
-    columns.extend((
-        ("stock", labels["stock"], 6, "right"),
-        ("status", labels["status"], 8, "left"),
-    ))
-    return columns
-
-
 def _price_table_value(item: OutdoorPriceItem, key: str, none_text: str) -> str:
     if key == "sku":
         return item.sku or none_text
@@ -594,36 +581,97 @@ def _price_table_value(item: OutdoorPriceItem, key: str, none_text: str) -> str:
     return (item.prices or {}).get(key, "") or none_text
 
 
-def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> str:
+def _price_table_line(cells: list[tuple[str, int, str]]) -> list[str]:
+    wrapped_cells = [_wrap_cell(value, width) for value, width, _ in cells]
+    height = max(len(cell) for cell in wrapped_cells)
+    lines: list[str] = []
+    for line_idx in range(height):
+        parts: list[str] = []
+        for cell_idx, (_, width, align) in enumerate(cells):
+            value = wrapped_cells[cell_idx][line_idx] if line_idx < len(wrapped_cells[cell_idx]) else ""
+            parts.append(_right_cell(value, width) if align == "right" else _fit_cell(value, width))
+        lines.append(" ".join(parts).rstrip())
+    return lines
+
+
+def _price_table_layout(lang: str, tier: str) -> tuple[list[tuple[str, int, str]], list[tuple[str, int, str]]]:
+    labels = _price_table_column_labels(lang)
+    first_line: list[tuple[str, int, str]] = [("sku", 10, "left")]
+    if tier == "vvip":
+        first_line.append(("usd", 5, "right"))
+    first_line.append(("rub", 9, "right"))
+
+    second_line: list[tuple[str, int, str]] = []
+    if tier in {"svip", "vvip"}:
+        second_line.extend((("cny_ru", 7, "right"), ("cny_cn", 7, "right")))
+    second_line.extend((("stock", 5, "right"), ("status", 6, "left")))
+
+    first_header = [(labels[key], width, align) for key, width, align in first_line]
+    second_header = [(labels[key], width, align) for key, width, align in second_line]
+    return first_header, second_header
+
+
+def _price_table_rows(
+    item: OutdoorPriceItem,
+    lang: str,
+    tier: str,
+) -> tuple[list[tuple[str, int, str]], list[tuple[str, int, str]]]:
     labels = _price_field_labels(lang)
-    columns = _price_table_columns(lang, tier)
-    raw_rows = [
-        [_price_table_value(item, column_key, labels["none"]) for column_key, *_ in columns]
-        for item in items
+    first_header, second_header = _price_table_layout(lang, tier)
+    first_line = [
+        (_price_table_value(item, key, labels["none"]), width, align)
+        for key, width, align in _price_table_keys(first_header, tier, first=True)
     ]
-    widths: list[int] = []
-    for idx, (_, header, cap, _) in enumerate(columns):
-        values = [row[idx] for row in raw_rows]
-        max_width = max([_display_width(header), *(_display_width(value) for value in values)], default=0)
-        widths.append(max(_display_width(header), min(max_width, cap)))
+    second_line = [
+        (_price_table_value(item, key, labels["none"]), width, align)
+        for key, width, align in _price_table_keys(second_header, tier, first=False)
+    ]
+    return first_line, second_line
 
-    header = " ".join(_fit_cell(column[1], widths[idx]) for idx, column in enumerate(columns))
-    sep = "\u2500" * min(_display_width(header), 48)
-    rows = [header, sep]
-    for raw_row in raw_rows:
-        wrapped_cells = [_wrap_cell(raw_row[idx], widths[idx]) for idx in range(len(columns))]
-        height = max(len(cell) for cell in wrapped_cells)
-        for line_idx in range(height):
-            cells: list[str] = []
-            for col_idx, column in enumerate(columns):
-                value = wrapped_cells[col_idx][line_idx] if line_idx < len(wrapped_cells[col_idx]) else ""
-                if column[3] == "right":
-                    cells.append(_right_cell(value, widths[col_idx]))
-                else:
-                    cells.append(_fit_cell(value, widths[col_idx]))
-            rows.append(" ".join(cells))
-        rows.append(sep)
 
+def _price_table_keys(
+    header: list[tuple[str, int, str]],
+    tier: str,
+    *,
+    first: bool,
+) -> list[tuple[str, int, str]]:
+    if first:
+        keys: list[tuple[str, int, str]] = [("sku", header[0][1], header[0][2])]
+        offset = 1
+        if tier == "vvip":
+            keys.append(("usd", header[offset][1], header[offset][2]))
+            offset += 1
+        keys.append(("rub", header[offset][1], header[offset][2]))
+        return keys
+    keys = []
+    offset = 0
+    if tier in {"svip", "vvip"}:
+        keys.extend((
+            ("cny_ru", header[offset][1], header[offset][2]),
+            ("cny_cn", header[offset + 1][1], header[offset + 1][2]),
+        ))
+        offset += 2
+    keys.extend((
+        ("stock", header[offset][1], header[offset][2]),
+        ("status", header[offset + 1][1], header[offset + 1][2]),
+    ))
+    return keys
+
+
+def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> str:
+    first_header, second_header = _price_table_layout(lang, tier)
+    rows = [
+        *_price_table_line(first_header),
+        *_price_table_line(second_header),
+        "\u2500" * 24,
+    ]
+    for item in items:
+        first_line, second_line = _price_table_rows(item, lang, tier)
+        rows.extend(_price_table_line(first_line))
+        rows.extend(_price_table_line(second_line))
+        rows.append("")
+    if rows and rows[-1] == "":
+        rows.pop()
     return f"<pre>{escape(chr(10).join(rows))}</pre>"
 
 
