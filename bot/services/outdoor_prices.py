@@ -203,6 +203,7 @@ def _is_russia_address_header(value: str) -> bool:
             "ru address",
             "россий",
             "россия",
+            "русск",
         ),
     )
 
