@@ -34,14 +34,14 @@ INVENTORY_TIERS: dict[str, InventoryTier] = {
         label="SVIP",
         access_key=MENU_SVIP_INVENTORY,
         stock_sheet_title="Stock_Outdoor 【SVIP版】",
-        price_currency_keys=("cny",),
+        price_currency_keys=("rub", "cny_ru", "cny_cn"),
     ),
     VVIP_TIER: InventoryTier(
         code=VVIP_TIER,
         label="VVIP",
         access_key=MENU_VVIP_INVENTORY,
         stock_sheet_title="Stock_Outdoor 【VVIP版】",
-        price_currency_keys=("usd", "rub", "cny"),
+        price_currency_keys=("usd", "rub", "cny_ru", "cny_cn"),
     ),
 }
 

@@ -134,16 +134,44 @@ def _find_header_row(values: list[list[str]]) -> int:
     return 0
 
 
+def _combined_headers(values: list[list[str]], header_idx: int) -> list[str]:
+    """Combine the SKU header row with nearby merged/section header rows."""
+    rows = values[max(0, header_idx - 3) : header_idx + 1]
+    width = max((len(row) for row in rows), default=0)
+    filled_rows: list[list[str]] = []
+    for row in rows:
+        filled: list[str] = []
+        last = ""
+        for col_idx in range(width):
+            value = row[col_idx].strip() if col_idx < len(row) else ""
+            if value:
+                last = value
+            filled.append(last)
+        filled_rows.append(filled)
+
+    headers: list[str] = []
+    for col_idx in range(width):
+        parts: list[str] = []
+        for row in filled_rows:
+            value = row[col_idx].strip()
+            if value and value not in parts:
+                parts.append(value)
+        headers.append(" ".join(parts))
+    return headers
+
+
 def _overview_tier_price_map(values: list[list[str]], tier: str) -> dict[str, str]:
     """Read USD prices from Brand Price Overview by SKU for the given tier."""
     if not values:
         return {}
 
     header_idx = _find_header_row(values)
-    headers = values[header_idx]
+    headers = _combined_headers(values, header_idx)
     roles = _column_roles(headers)
     sku_idx = roles.get("sku", 0)
-    price_idx = roles.get(f"{tier}_plain")
+    price_idx = roles.get(f"{tier}_usd")
+    if price_idx is None:
+        price_idx = roles.get(f"{tier}_plain")
     if price_idx is None:
         price_idx = roles.get(tier)
     if price_idx is None:
@@ -163,8 +191,49 @@ def _contains_any(value: str, needles: tuple[str, ...]) -> bool:
     return any(needle in value for needle in needles)
 
 
+def _is_russia_address_header(value: str) -> bool:
+    return _contains_any(
+        value,
+        (
+            "俄罗斯地址",
+            "俄地址",
+            "俄罗斯",
+            "russia address",
+            "russian address",
+            "ru address",
+            "россий",
+            "россия",
+        ),
+    )
+
+
+def _is_china_address_header(value: str) -> bool:
+    return _contains_any(
+        value,
+        (
+            "中国地址",
+            "国内地址",
+            "中国",
+            "china address",
+            "chinese address",
+            "cn address",
+            "китай",
+        ),
+    )
+
+
 def _has_tier_marker(value: str, tier: str) -> bool:
     return re.search(rf"(?<![a-z0-9]){re.escape(tier)}(?![a-z0-9])", value) is not None
+
+
+def _set_cny_role(roles: dict[str, int], key_prefix: str, text: str, idx: int) -> None:
+    prefix = f"{key_prefix}_" if key_prefix else ""
+    if _is_russia_address_header(text) and f"{prefix}cny_ru" not in roles:
+        roles[f"{prefix}cny_ru"] = idx
+    elif _is_china_address_header(text) and f"{prefix}cny_cn" not in roles:
+        roles[f"{prefix}cny_cn"] = idx
+    if f"{prefix}cny" not in roles:
+        roles[f"{prefix}cny"] = idx
 
 
 def _column_roles(headers: list[str]) -> dict[str, int]:
@@ -181,8 +250,8 @@ def _column_roles(headers: list[str]) -> dict[str, int]:
                 roles[f"{tier}_usd"] = idx
             if is_rub and f"{tier}_rub" not in roles:
                 roles[f"{tier}_rub"] = idx
-            if is_cny and f"{tier}_cny" not in roles:
-                roles[f"{tier}_cny"] = idx
+            if is_cny:
+                _set_cny_role(roles, tier, text, idx)
             if not (is_usd or is_rub or is_cny) and f"{tier}_plain" not in roles:
                 roles[f"{tier}_plain"] = idx
         if "sku" in text and "sku" not in roles:
@@ -191,18 +260,36 @@ def _column_roles(headers: list[str]) -> dict[str, int]:
             roles["image"] = idx
         if _contains_any(text, ("描述", "description", "describe", "описывать", "опис")) and "description" not in roles:
             roles["description"] = idx
-        if _contains_any(text, ("московский склад", "moscow stock", "moscow warehouse", "莫斯科库存", "莫仓库存")) and "moscow_stock" not in roles:
+        if (
+            _contains_any(text, ("московский склад", "moscow stock", "moscow warehouse", "莫斯科库存", "莫仓库存"))
+            and "moscow_stock" not in roles
+        ):
             roles["moscow_stock"] = idx
         if _contains_any(text, ("状态", "state", "status", "состояние")) and "status" not in roles:
             roles["status"] = idx
         if is_rub and "rub" not in roles:
             roles["rub"] = idx
-        if is_cny and "cny" not in roles:
-            roles["cny"] = idx
+        if is_cny:
+            _set_cny_role(roles, "", text, idx)
         if is_usd and "usd" not in roles:
             roles["usd"] = idx
     roles.setdefault("sku", 0)
     return roles
+
+
+def _price_role_candidates(tier: str, key: str) -> tuple[str, ...]:
+    if key == "cny_ru":
+        return (f"{tier}_cny_ru", "cny_ru")
+    if key == "cny_cn":
+        return (f"{tier}_cny_cn", "cny_cn")
+    return (f"{tier}_{key}", key)
+
+
+def _price_column_index(roles: dict[str, int], tier: str, key: str) -> int | None:
+    for role in _price_role_candidates(tier, key):
+        if role in roles:
+            return roles[role]
+    return None
 
 
 def _looks_like_url(value: str) -> bool:
@@ -273,7 +360,7 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
     formula_values = worksheet.get_all_values(value_render_option="FORMULA")
 
     header_idx = _find_header_row(values)
-    headers = values[header_idx]
+    headers = _combined_headers(values, header_idx)
     roles = _column_roles(headers)
     wanted_prices = inventory_price_currency_keys(tier)
     overview_usd_prices = _overview_tier_price_map(overview_values, tier) if "usd" in wanted_prices else {}
@@ -294,7 +381,7 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
             if key == "usd":
                 value = overview_usd_prices.get(_sku_key(sku), "")
             if not value:
-                col_idx = roles.get(f"{tier}_{key}", roles.get(key))
+                col_idx = _price_column_index(roles, tier, key)
                 if col_idx is not None and col_idx < len(padded):
                     value = padded[col_idx].strip()
             if value:
