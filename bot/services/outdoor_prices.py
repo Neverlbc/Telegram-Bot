@@ -134,16 +134,26 @@ def _contains_any(value: str, needles: tuple[str, ...]) -> bool:
     return any(needle in value for needle in needles)
 
 
+def _has_tier_marker(value: str, tier: str) -> bool:
+    return re.search(rf"(?<![a-z0-9]){re.escape(tier)}(?![a-z0-9])", value) is not None
+
+
 def _column_roles(headers: list[str]) -> dict[str, int]:
     roles: dict[str, int] = {}
     for idx, header in enumerate(headers):
         text = _normalized_cell(header)
-        if "vvip" in text and "vvip_rub" not in roles:
-            roles["vvip_rub"] = idx
-        elif "svip" in text and "svip_rub" not in roles:
-            roles["svip_rub"] = idx
-        elif "vip" in text and "vip_rub" not in roles:
-            roles["vip_rub"] = idx
+        is_rub = _contains_any(text, ("руб", "ruble", "рубл", "卢布", "aliexpress"))
+        is_cny = _contains_any(text, ("юань", "yuan", "rmb", "cny", "人民币"))
+        is_usd = _contains_any(text, ("usd", "дол", "美元", "dollar", "$"))
+        for tier in ("vvip", "svip", "vip"):
+            if not _has_tier_marker(text, tier):
+                continue
+            if is_usd and f"{tier}_usd" not in roles:
+                roles[f"{tier}_usd"] = idx
+            if is_rub and f"{tier}_rub" not in roles:
+                roles[f"{tier}_rub"] = idx
+            if is_cny and f"{tier}_cny" not in roles:
+                roles[f"{tier}_cny"] = idx
         if "sku" in text and "sku" not in roles:
             roles["sku"] = idx
         if _contains_any(text, ("图片", "image", "photo", "pic", "фото", "изображ", "картин")) and "image" not in roles:
@@ -154,11 +164,11 @@ def _column_roles(headers: list[str]) -> dict[str, int]:
             roles["moscow_stock"] = idx
         if _contains_any(text, ("状态", "state", "status", "состояние")) and "status" not in roles:
             roles["status"] = idx
-        if _contains_any(text, ("руб", "ruble", "рубл", "卢布", "aliexpress")) and "rub" not in roles:
+        if is_rub and "rub" not in roles:
             roles["rub"] = idx
-        if _contains_any(text, ("юань", "yuan", "rmb", "cny", "人民币")) and "cny" not in roles:
+        if is_cny and "cny" not in roles:
             roles["cny"] = idx
-        if _contains_any(text, ("usd", "дол", "美元", "dollar", "$")) and "usd" not in roles:
+        if is_usd and "usd" not in roles:
             roles["usd"] = idx
     roles.setdefault("sku", 0)
     return roles
@@ -215,8 +225,6 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
     headers = values[header_idx]
     roles = _column_roles(headers)
     wanted_prices = inventory_price_currency_keys(tier)
-    price_labels = {"usd": "美元", "rub": "卢布", "cny": "人民币"}
-    rub_role = f"{tier}_rub"
 
     items: list[OutdoorPriceItem] = []
     for row in values[header_idx + 1:]:
@@ -228,15 +236,12 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
 
         prices: dict[str, str] = {}
         for key in wanted_prices:
-            if key == "rub":
-                col_idx = roles.get(rub_role, roles.get("rub"))
-            else:
-                col_idx = roles.get(key)
+            col_idx = roles.get(f"{tier}_{key}", roles.get(key))
             value = ""
             if col_idx is not None and col_idx < len(padded):
                 value = padded[col_idx].strip()
             if value:
-                prices[price_labels[key]] = value
+                prices[key] = value
 
         items.append(
             OutdoorPriceItem(

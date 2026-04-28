@@ -34,6 +34,7 @@ from bot.services.outdoor_prices import (
 )
 from bot.services.inventory_tiers import (
     PRICE_TIER_CODES,
+    inventory_price_currency_keys,
     inventory_tier_access_key,
     inventory_tier_label,
     normalize_inventory_tier,
@@ -432,24 +433,24 @@ def _price_field_labels(lang: str) -> dict[str, str]:
     }
 
 
-def _currency_label(label: str, lang: str) -> str:
-    normalized = label.strip().casefold()
-    if "卢布" in label or "rub" in normalized or "руб" in normalized:
+def _currency_label(currency_key: str, lang: str) -> str:
+    if currency_key == "rub":
         return {"zh": "卢布", "en": "RUB", "ru": "руб."}.get(lang, "卢布")
-    if "人民币" in label or "cny" in normalized or "yuan" in normalized or "юань" in normalized:
+    if currency_key == "cny":
         return {"zh": "人民币", "en": "CNY", "ru": "юань"}.get(lang, "人民币")
-    if "美元" in label or "usd" in normalized or "dollar" in normalized or "дол" in normalized:
+    if currency_key == "usd":
         return {"zh": "美元", "en": "USD", "ru": "долл."}.get(lang, "美元")
-    return label
+    return currency_key
 
 
-def _format_price_line(tier_label: str, label: str, value: str, lang: str) -> str:
-    currency = _currency_label(label, lang)
+def _format_price_line(tier_label: str, currency_key: str, value: str, lang: str) -> str:
+    currency = _currency_label(currency_key, lang)
+    display_value = value or {"zh": "未填写", "en": "not filled", "ru": "не указана"}.get(lang, "未填写")
     if lang == "en":
-        return f"{tier_label} approximate {currency} price: <b>{escape(value)}</b>"
+        return f"{tier_label} approximate {currency} price: <b>{escape(display_value)}</b>"
     if lang == "ru":
-        return f"Примерная цена {tier_label} в {currency}: <b>{escape(value)}</b>"
-    return f"{tier_label}客户的{currency}大约价格：<b>{escape(value)}</b>"
+        return f"Примерная цена {tier_label} в {currency}: <b>{escape(display_value)}</b>"
+    return f"{tier_label}客户的{currency}大约价格：<b>{escape(display_value)}</b>"
 
 
 def _format_price_items(items: list[OutdoorPriceItem], lang: str, tier: str, rate: str) -> str:
@@ -473,11 +474,8 @@ def _format_price_items(items: list[OutdoorPriceItem], lang: str, tier: str, rat
         lines.append(f"{labels['description']}：{escape(description)}")
 
         prices = item.prices or {}
-        if prices:
-            for label, value in prices.items():
-                lines.append(_format_price_line(tier_label, label, value, lang))
-        else:
-            lines.append({"zh": "价格：未填写", "en": "Price: not filled", "ru": "Цена: не указана"}.get(lang, "价格：未填写"))
+        for currency_key in inventory_price_currency_keys(tier):
+            lines.append(_format_price_line(tier_label, currency_key, prices.get(currency_key, ""), lang))
 
         lines.append(f"{labels['moscow_stock']}：{escape(item.moscow_stock or labels['none'])}")
         lines.append(f"{labels['status']}：{escape(item.status or labels['none'])}")
