@@ -4,7 +4,7 @@
 1. 服务中心说明（静态文本）
 2. 服务中心 TG 入口链接
 3. 设备检修查询（输入 CDEK 单号 → 查 Google 表 → 返回状态 + 订阅状态变更）
-4. 管理员入口（密码 service2026adminXXA → 后台隐藏菜单）
+4. 管理员入口（发送配置文件中的 SERVICE_ADMIN_PASSWORD → 后台隐藏菜单）
 """
 
 from __future__ import annotations

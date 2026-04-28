@@ -102,11 +102,11 @@ class Settings(BaseSettings):
     vandych_shipping_sheet_gid: int = Field(1510817399, description="Vandych 空运支付 Google Sheet tab GID")
 
     # ── 密码入口 ──────────────────────────────────────
-    vip_inventory_password: str = Field("ABFVIP2026Hunter", description="VIP 现货查询密码")
-    svip_inventory_password: str = Field("ABFSVIP2024Tactics", description="SVIP 现货与价格查询密码")
-    vvip_inventory_password: str = Field("ABFVVIP2025Phoenix", description="VVIP 现货与价格查询密码")
-    service_admin_password: str = Field("service2026adminXXA", description="服务中心管理员密码")
-    vandych_password: str = Field("ABFVandych2026XXA", description="Vandych VIP 隐藏菜单密码")
+    vip_inventory_password: str = Field("", description="VIP 现货查询密码")
+    svip_inventory_password: str = Field("", description="SVIP 现货与价格查询密码")
+    vvip_inventory_password: str = Field("", description="VVIP 现货与价格查询密码")
+    service_admin_password: str = Field("", description="服务中心管理员密码")
+    vandych_password: str = Field("", description="Vandych VIP 隐藏菜单密码")
 
     # ── TG 跳转链接 ───────────────────────────────────
     club_tg_link: str = Field("https://t.me/placeholder_club", description="A-BF 晨夜俱乐部 TG 链接")

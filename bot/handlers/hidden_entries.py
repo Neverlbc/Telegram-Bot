@@ -29,16 +29,16 @@ def _hidden_password_kind(text: str | None) -> str:
     password = (text or "").strip()
     if not password:
         return ""
-    if password == settings.vip_inventory_password.strip():
-        return MENU_VIP_INVENTORY
-    if password == settings.svip_inventory_password.strip():
-        return MENU_SVIP_INVENTORY
-    if password == settings.vvip_inventory_password.strip():
-        return MENU_VVIP_INVENTORY
-    if password == settings.service_admin_password.strip():
-        return MENU_SERVICE_ADMIN
-    if password == settings.vandych_password.strip():
-        return MENU_VANDYCH
+    configured_passwords = (
+        (settings.vip_inventory_password.strip(), MENU_VIP_INVENTORY),
+        (settings.svip_inventory_password.strip(), MENU_SVIP_INVENTORY),
+        (settings.vvip_inventory_password.strip(), MENU_VVIP_INVENTORY),
+        (settings.service_admin_password.strip(), MENU_SERVICE_ADMIN),
+        (settings.vandych_password.strip(), MENU_VANDYCH),
+    )
+    for configured_password, kind in configured_passwords:
+        if configured_password and password == configured_password:
+            return kind
     return ""
 
 
