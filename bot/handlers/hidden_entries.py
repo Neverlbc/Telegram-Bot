@@ -11,13 +11,16 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.config import settings
-from bot.keyboards.inline import inventory_category_keyboard, service_center_admin_keyboard, vip_menu_keyboard
+from bot.keyboards.inline import inventory_hidden_menu_keyboard, service_center_admin_keyboard, vip_menu_keyboard
 from bot.services.hidden_access import (
     MENU_SERVICE_ADMIN,
+    MENU_SVIP_INVENTORY,
     MENU_VANDYCH,
     MENU_VIP_INVENTORY,
+    MENU_VVIP_INVENTORY,
     grant_hidden_access,
 )
+from bot.services.inventory_tiers import inventory_tier_label
 
 router = Router(name="hidden_entries")
 
@@ -28,6 +31,10 @@ def _hidden_password_kind(text: str | None) -> str:
         return ""
     if password == settings.vip_inventory_password.strip():
         return MENU_VIP_INVENTORY
+    if password == settings.svip_inventory_password.strip():
+        return MENU_SVIP_INVENTORY
+    if password == settings.vvip_inventory_password.strip():
+        return MENU_VVIP_INVENTORY
     if password == settings.service_admin_password.strip():
         return MENU_SERVICE_ADMIN
     if password == settings.vandych_password.strip():
@@ -48,12 +55,17 @@ async def on_hidden_password(
         await state.clear()
         await grant_hidden_access(state, kind)
 
-    if kind == MENU_VIP_INVENTORY:
+    if kind in {MENU_VIP_INVENTORY, MENU_SVIP_INVENTORY, MENU_VVIP_INVENTORY}:
         from bot.handlers.inventory import _t as inv_t
+        tier = {
+            MENU_VIP_INVENTORY: "vip",
+            MENU_SVIP_INVENTORY: "svip",
+            MENU_VVIP_INVENTORY: "vvip",
+        }[kind]
 
         await message.answer(
-            inv_t(lang, "vip_category_title"),
-            reply_markup=inventory_category_keyboard(lang, vip=True),
+            inv_t(lang, "hidden_menu_title").format(tier=inventory_tier_label(tier)),
+            reply_markup=inventory_hidden_menu_keyboard(lang, tier=tier),
         )
     elif kind == MENU_SERVICE_ADMIN:
         from bot.handlers.service_center import _t as sc_t

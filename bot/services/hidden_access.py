@@ -11,6 +11,8 @@ ACCESS_TTL_SECONDS = 600
 DATA_KEY = "_hidden_access"
 
 MENU_VIP_INVENTORY = "vip_inventory"
+MENU_SVIP_INVENTORY = "svip_inventory"
+MENU_VVIP_INVENTORY = "vvip_inventory"
 MENU_SERVICE_ADMIN = "service_admin"
 MENU_VANDYCH = "vandych"
 

@@ -18,9 +18,27 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.config import settings
 from bot.keyboards.callbacks import InventoryCallback, NavCallback
-from bot.keyboards.inline import inventory_category_keyboard, inventory_menu_keyboard
-from bot.services.hidden_access import MENU_VIP_INVENTORY, clear_state_keep_hidden_access, has_hidden_access
+from bot.keyboards.inline import inventory_category_keyboard, inventory_hidden_menu_keyboard, inventory_menu_keyboard
+from bot.services.hidden_access import (
+    MENU_SVIP_INVENTORY,
+    MENU_VIP_INVENTORY,
+    MENU_VVIP_INVENTORY,
+    clear_state_keep_hidden_access,
+    has_hidden_access,
+)
 from bot.services.outdoor_sheets import OutdoorItem, get_outdoor_inventory
+from bot.services.outdoor_prices import (
+    OutdoorPriceItem,
+    get_outdoor_exchange_rate,
+    get_outdoor_price_brand_titles,
+    get_outdoor_price_items,
+)
+from bot.services.inventory_tiers import (
+    PRICE_TIER_CODES,
+    inventory_tier_access_key,
+    inventory_tier_label,
+    normalize_inventory_tier,
+)
 
 logger = logging.getLogger(__name__)
 router = Router(name="inventory")
@@ -121,6 +139,34 @@ TEXTS: dict[str, dict[str, str]] = {
         "not_configured": "⚠️ Сервис наличия ещё не настроен.",
     },
 }
+
+TEXTS["zh"].update({
+    "hidden_menu_title": "🔐 欢迎进入 {tier} 专属隐藏菜单。\n\n请选择功能：",
+    "price_brand_title": "💰 <b>{tier} 价格查询</b>\n\n请选择品牌。{rate_note}",
+    "price_exchange_note": "\n\n⚠️ 当前统一汇率：<b>{rate}</b>，仅作提示，不参与自动计算；价格以表格显示为准。",
+    "price_exchange_note_no_rate": "\n\n⚠️ 当前统一汇率未读取到，请报价前人工确认。",
+    "price_title": "💰 <b>{tier} 价格 · {brand}</b>{rate_note}\n\n",
+    "price_empty": "暂无可展示的价格数据。",
+    "price_loading_err": "读取价格表失败，请稍后重试。",
+})
+TEXTS["en"].update({
+    "hidden_menu_title": "🔐 Welcome to the {tier} hidden menu.\n\nPlease choose a function:",
+    "price_brand_title": "💰 <b>{tier} Price Query</b>\n\nSelect a brand.{rate_note}",
+    "price_exchange_note": "\n\n⚠️ Current unified exchange rate: <b>{rate}</b>. It is only a reminder and is not used for calculation; prices follow the sheet.",
+    "price_exchange_note_no_rate": "\n\n⚠️ Unified exchange rate was not found. Please confirm manually before quoting.",
+    "price_title": "💰 <b>{tier} Prices · {brand}</b>{rate_note}\n\n",
+    "price_empty": "No price data to show.",
+    "price_loading_err": "Failed to load the price sheet. Please try again later.",
+})
+TEXTS["ru"].update({
+    "hidden_menu_title": "🔐 Добро пожаловать в скрытое меню {tier}.\n\nВыберите функцию:",
+    "price_brand_title": "💰 <b>Цены {tier}</b>\n\nВыберите бренд.{rate_note}",
+    "price_exchange_note": "\n\n⚠️ Текущий единый курс: <b>{rate}</b>. Это только напоминание, авторасчёт не выполняется; цены берутся из таблицы.",
+    "price_exchange_note_no_rate": "\n\n⚠️ Единый курс не найден. Проверьте курс вручную перед расчётом.",
+    "price_title": "💰 <b>Цены {tier} · {brand}</b>{rate_note}\n\n",
+    "price_empty": "Нет данных по ценам.",
+    "price_loading_err": "Не удалось загрузить таблицу цен. Попробуйте позже.",
+})
 
 
 def _t(lang: str, key: str) -> str:
@@ -248,7 +294,7 @@ def _available_items(items: list[OutdoorItem]) -> list[OutdoorItem]:
     return _stock_first([item for item in items if item.qty > 0])
 
 
-def _brand_keyboard(items: list[OutdoorItem], lang: str, vip: bool) -> InlineKeyboardBuilder:
+def _brand_keyboard(items: list[OutdoorItem], lang: str, vip: bool, tier: str = "") -> InlineKeyboardBuilder:
     brands = _ordered_brands(items, lang)
     available_count = len(_available_items(items))
     builder = InlineKeyboardBuilder()
@@ -258,17 +304,17 @@ def _brand_keyboard(items: list[OutdoorItem], lang: str, vip: bool) -> InlineKey
             "en": f"⚡ In-stock Quick View ({available_count})",
             "ru": f"⚡ Быстрый просмотр ({available_count})",
         }.get(lang, f"⚡ 快速展示有货 ({available_count})"),
-        callback_data=InventoryCallback(action="quick", cat_id="outdoor", vip=vip).pack(),
+        callback_data=InventoryCallback(action="quick", cat_id="outdoor", vip=vip, tier=tier).pack(),
     ))
     for idx, brand in enumerate(brands, start=1):
         count = len(_filter_brand_items(items, brand, lang))
         builder.row(InlineKeyboardButton(
             text=f"🏷 {brand} ({count})",
-            callback_data=InventoryCallback(action="brand", cat_id="outdoor", vip=vip, page=idx).pack(),
+            callback_data=InventoryCallback(action="brand", cat_id="outdoor", vip=vip, tier=tier, page=idx).pack(),
         ))
     builder.row(InlineKeyboardButton(
         text={"zh": "◀️ 返回品类", "en": "◀️ Back", "ru": "◀️ Назад"}.get(lang, "◀️ Back"),
-        callback_data=InventoryCallback(action="categories", vip=vip).pack(),
+        callback_data=InventoryCallback(action="categories", vip=vip, tier=tier).pack(),
     ))
     builder.row(InlineKeyboardButton(
         text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 Main Menu"),
@@ -327,14 +373,26 @@ def _contact_buttons(lang: str, vip: bool, user_id: int | None = None) -> list[I
     ]
 
 
-async def _ensure_vip_access(
+def _callback_tier(callback_data: InventoryCallback) -> str:
+    return normalize_inventory_tier(callback_data.tier, callback_data.vip)
+
+
+def _rate_note(lang: str, rate: str) -> str:
+    if rate:
+        return _t(lang, "price_exchange_note").format(rate=escape(rate))
+    return _t(lang, "price_exchange_note_no_rate")
+
+
+async def _ensure_tier_access(
     callback: CallbackQuery,
     state: FSMContext | None,
     lang: str,
+    tier: str,
 ) -> bool:
-    if not state:
-        return False
-    if await has_hidden_access(state, MENU_VIP_INVENTORY):
+    access_key = inventory_tier_access_key(tier)
+    if not access_key:
+        return True
+    if state and await has_hidden_access(state, access_key):
         return True
     if callback.message:
         await callback.message.edit_text(
@@ -343,6 +401,94 @@ async def _ensure_vip_access(
         )
     await callback.answer(_t(lang, "access_expired"), show_alert=True)
     return False
+
+
+def _price_brand_keyboard(brands: list[str], lang: str, tier: str) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    for idx, brand in enumerate(brands, start=1):
+        builder.row(InlineKeyboardButton(
+            text=f"💰 {brand}",
+            callback_data=InventoryCallback(action="price_brand", vip=True, tier=tier, page=idx).pack(),
+        ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "⬅️ 返回", "en": "⬅️ Back", "ru": "⬅️ Назад"}.get(lang, "⬅️ 返回"),
+        callback_data=InventoryCallback(action="tier_menu", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 主菜单"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+    return builder
+
+
+def _format_price_items(items: list[OutdoorPriceItem], lang: str) -> str:
+    if not items:
+        return _t(lang, "price_empty")
+
+    blocks: list[str] = []
+    shown = 0
+    for item in items:
+        lines = [f"<b>{escape(item.sku)}</b>"]
+        if item.image_url:
+            lines.append(f'🖼 <a href="{escape(item.image_url, quote=True)}">图片</a>')
+        if item.info:
+            lines.append(escape(item.info))
+        prices = item.prices or {}
+        if prices:
+            for label, value in prices.items():
+                lines.append(f"{escape(label)}: <b>{escape(value)}</b>")
+        else:
+            lines.append({"zh": "价格：未填写", "en": "Price: not filled", "ru": "Цена: не указана"}.get(lang, "价格：未填写"))
+        block = "\n".join(lines)
+        projected = "\n\n".join([*blocks, block])
+        if len(projected) > 3200:
+            break
+        blocks.append(block)
+        shown += 1
+
+    if len(items) > shown:
+        blocks.append({
+            "zh": f"还有 {len(items) - shown} 条未展示，请进入表格查看完整数据。",
+            "en": f"{len(items) - shown} more rows are not shown. Open the sheet for full data.",
+            "ru": f"Ещё {len(items) - shown} строк не показано. Полные данные в таблице.",
+        }.get(lang, f"还有 {len(items) - shown} 条未展示。"))
+    return "\n\n".join(blocks)
+
+
+async def _ensure_vip_access(
+    callback: CallbackQuery,
+    state: FSMContext | None,
+    lang: str,
+) -> bool:
+    return await _ensure_tier_access(callback, state, lang, "vip")
+
+
+async def _inventory_access_flags(state: FSMContext | None) -> dict[str, bool]:
+    if not state:
+        return {"vip": False, "svip": False, "vvip": False}
+    return {
+        "vip": await has_hidden_access(state, MENU_VIP_INVENTORY),
+        "svip": await has_hidden_access(state, MENU_SVIP_INVENTORY),
+        "vvip": await has_hidden_access(state, MENU_VVIP_INVENTORY),
+    }
+
+
+def _inventory_menu_with_flags(lang: str, flags: dict[str, bool]):
+    return inventory_menu_keyboard(
+        lang,
+        vip_unlocked=flags["vip"],
+        svip_unlocked=flags["svip"],
+        vvip_unlocked=flags["vvip"],
+    )
+
+
+async def _show_tier_menu(callback: CallbackQuery, lang: str, tier: str) -> None:
+    if not callback.message:
+        return
+    await callback.message.edit_text(
+        _t(lang, "hidden_menu_title").format(tier=inventory_tier_label(tier)),
+        reply_markup=inventory_hidden_menu_keyboard(lang, tier=tier),
+    )
 
 
 # ── Handlers ────────────────────────────────────────────
@@ -357,10 +503,10 @@ async def on_inventory_menu(
         return
     if state:
         await clear_state_keep_hidden_access(state)
-    vip_unlocked = bool(state and await has_hidden_access(state, MENU_VIP_INVENTORY))
+    flags = await _inventory_access_flags(state)
     await callback.message.edit_text(
         _t(lang, "menu_title"),
-        reply_markup=inventory_menu_keyboard(lang, vip_unlocked=vip_unlocked),
+        reply_markup=_inventory_menu_with_flags(lang, flags),
     )
     await callback.answer()
 
@@ -376,6 +522,22 @@ async def on_public_query(callback: CallbackQuery, lang: str = "zh") -> None:
     await callback.answer()
 
 
+@router.callback_query(InventoryCallback.filter(F.action == "tier_menu"))
+async def on_inventory_tier_menu(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+    await _show_tier_menu(callback, lang, tier)
+    await callback.answer()
+
+
 @router.callback_query(InventoryCallback.filter(F.action == "categories"))
 async def on_inventory_categories(
     callback: CallbackQuery,
@@ -385,12 +547,84 @@ async def on_inventory_categories(
 ) -> None:
     if not callback.message:
         return
-    if callback_data.vip and not await _ensure_vip_access(callback, state, lang):
+    tier = _callback_tier(callback_data)
+    vip = tier != "public"
+    if vip and not await _ensure_tier_access(callback, state, lang, tier):
         return
     await callback.message.edit_text(
-        _t(lang, "vip_category_title") if callback_data.vip else _t(lang, "category_title"),
-        reply_markup=inventory_category_keyboard(lang, vip=callback_data.vip),
+        _t(lang, "vip_category_title") if vip else _t(lang, "category_title"),
+        reply_markup=inventory_category_keyboard(lang, vip=vip, tier=tier if vip else ""),
     )
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "price_brands"))
+async def on_inventory_price_brands(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+
+    brands = await get_outdoor_price_brand_titles()
+    rate = await get_outdoor_exchange_rate()
+    if not brands:
+        await callback.message.edit_text(_t(lang, "price_loading_err"), reply_markup=inventory_hidden_menu_keyboard(lang, tier=tier))
+        await callback.answer()
+        return
+
+    await callback.message.edit_text(
+        _t(lang, "price_brand_title").format(
+            tier=inventory_tier_label(tier),
+            rate_note=_rate_note(lang, rate),
+        ),
+        reply_markup=_price_brand_keyboard(brands, lang, tier).as_markup(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "price_brand"))
+async def on_inventory_price_brand(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+
+    brands = await get_outdoor_price_brand_titles()
+    brand_idx = callback_data.page - 1
+    if brand_idx < 0 or brand_idx >= len(brands):
+        await callback.answer(_t(lang, "price_loading_err"), show_alert=True)
+        return
+    brand = brands[brand_idx]
+    items, rate = await get_outdoor_price_items(brand, tier)
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text={"zh": "⬅️ 返回品牌", "en": "⬅️ Brands", "ru": "⬅️ Бренды"}.get(lang, "⬅️ 返回品牌"),
+        callback_data=InventoryCallback(action="price_brands", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 主菜单"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+
+    text = _t(lang, "price_title").format(
+        tier=inventory_tier_label(tier),
+        brand=escape(brand),
+        rate_note=_rate_note(lang, rate),
+    ) + _format_price_items(items, lang)
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), disable_web_page_preview=True)
     await callback.answer()
 
 
@@ -405,9 +639,10 @@ async def on_inventory_category(
     if not callback.message:
         return
 
-    vip = callback_data.vip
+    tier = _callback_tier(callback_data)
+    vip = tier != "public"
     cat_id = callback_data.cat_id
-    if vip and not await _ensure_vip_access(callback, state, lang):
+    if vip and not await _ensure_tier_access(callback, state, lang, tier):
         return
 
     if cat_id != "outdoor":
@@ -420,7 +655,7 @@ async def on_inventory_category(
         return
 
     try:
-        items = await get_outdoor_inventory(vip=vip)
+        items = await get_outdoor_inventory(vip=vip, tier=tier)
     except Exception as e:
         logger.error("get_outdoor_inventory failed: %s", e)
         await callback.message.edit_text(_t(lang, "loading_err"))
@@ -450,7 +685,7 @@ async def on_inventory_category(
 
     await callback.message.edit_text(
         _t(lang, "brand_title"),
-        reply_markup=_brand_keyboard(items, lang, vip).as_markup(),
+        reply_markup=_brand_keyboard(items, lang, vip, tier).as_markup(),
     )
     await callback.answer()
 
@@ -466,8 +701,9 @@ async def on_inventory_brand(
     if not callback.message:
         return
 
-    vip = callback_data.vip
-    if vip and not await _ensure_vip_access(callback, state, lang):
+    tier = _callback_tier(callback_data)
+    vip = tier != "public"
+    if vip and not await _ensure_tier_access(callback, state, lang, tier):
         return
 
     if not settings.outdoor_sheet_id:
@@ -476,7 +712,7 @@ async def on_inventory_brand(
         return
 
     try:
-        items = await get_outdoor_inventory(vip=vip)
+        items = await get_outdoor_inventory(vip=vip, tier=tier)
     except Exception as e:
         logger.error("get_outdoor_inventory failed: %s", e)
         await callback.message.edit_text(_t(lang, "loading_err"))
@@ -505,7 +741,7 @@ async def on_inventory_brand(
     builder.row(*_contact_buttons(lang, vip, user_id))
     builder.row(InlineKeyboardButton(
         text={"zh": "◀️ 返回品牌", "en": "◀️ Brands", "ru": "◀️ Бренды"}.get(lang, "◀️ Brands"),
-        callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip).pack(),
+        callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip, tier=tier).pack(),
     ))
     builder.row(InlineKeyboardButton(
         text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 Main Menu"),
@@ -527,8 +763,9 @@ async def on_inventory_quick(
     if not callback.message:
         return
 
-    vip = callback_data.vip
-    if vip and not await _ensure_vip_access(callback, state, lang):
+    tier = _callback_tier(callback_data)
+    vip = tier != "public"
+    if vip and not await _ensure_tier_access(callback, state, lang, tier):
         return
 
     if not settings.outdoor_sheet_id:
@@ -537,7 +774,7 @@ async def on_inventory_quick(
         return
 
     try:
-        items = await get_outdoor_inventory(vip=vip)
+        items = await get_outdoor_inventory(vip=vip, tier=tier)
     except Exception as e:
         logger.error("get_outdoor_inventory failed: %s", e)
         await callback.message.edit_text(_t(lang, "loading_err"))
@@ -552,7 +789,7 @@ async def on_inventory_quick(
         builder.row(*_contact_buttons(lang, vip, user_id))
         builder.row(InlineKeyboardButton(
             text={"zh": "◀️ 返回品牌", "en": "◀️ Brands", "ru": "◀️ Бренды"}.get(lang, "◀️ Brands"),
-            callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip).pack(),
+            callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip, tier=tier).pack(),
         ))
         builder.row(InlineKeyboardButton(
             text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 Main Menu"),
@@ -570,7 +807,7 @@ async def on_inventory_quick(
     builder.row(*_contact_buttons(lang, vip, user_id))
     builder.row(InlineKeyboardButton(
         text={"zh": "◀️ 返回品牌", "en": "◀️ Brands", "ru": "◀️ Бренды"}.get(lang, "◀️ Brands"),
-        callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip).pack(),
+        callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip, tier=tier).pack(),
     ))
     builder.row(InlineKeyboardButton(
         text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 Main Menu"),

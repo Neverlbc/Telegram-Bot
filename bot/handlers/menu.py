@@ -14,11 +14,14 @@ from bot.keyboards.callbacks import MenuCallback, NavCallback
 from bot.keyboards.inline import inventory_menu_keyboard, main_menu_keyboard, settings_menu_keyboard
 from bot.services.hidden_access import (
     MENU_SERVICE_ADMIN,
+    MENU_SVIP_INVENTORY,
     MENU_VANDYCH,
     MENU_VIP_INVENTORY,
+    MENU_VVIP_INVENTORY,
     clear_state_keep_hidden_access,
     has_hidden_access,
 )
+from bot.services.inventory_tiers import inventory_tier_access_key, normalize_inventory_tier
 
 logger = logging.getLogger(__name__)
 router = Router(name="menu")
@@ -68,9 +71,17 @@ def _expired_text(lang: str) -> str:
 
 async def _hidden_menu_flags(state: FSMContext | None) -> dict[str, bool]:
     if not state:
-        return {"vip_inventory": False, "service_admin": False, "vandych": False}
+        return {
+            "vip_inventory": False,
+            "svip_inventory": False,
+            "vvip_inventory": False,
+            "service_admin": False,
+            "vandych": False,
+        }
     return {
         "vip_inventory": await has_hidden_access(state, MENU_VIP_INVENTORY),
+        "svip_inventory": await has_hidden_access(state, MENU_SVIP_INVENTORY),
+        "vvip_inventory": await has_hidden_access(state, MENU_VVIP_INVENTORY),
         "service_admin": await has_hidden_access(state, MENU_SERVICE_ADMIN),
         "vandych": await has_hidden_access(state, MENU_VANDYCH),
     }
@@ -85,6 +96,8 @@ async def _main_keyboard_with_hidden_access(
         lang,
         settings.club_tg_link,
         vip_inventory_unlocked=flags["vip_inventory"],
+        svip_inventory_unlocked=flags["svip_inventory"],
+        vvip_inventory_unlocked=flags["vvip_inventory"],
         service_admin_unlocked=flags["service_admin"],
         vandych_unlocked=flags["vandych"],
     )
@@ -182,23 +195,31 @@ async def on_nav_back(
         )
     elif target == "inv_public":
         from bot.handlers.inventory import _t as inv_t
-        vip_unlocked = bool(state and await has_hidden_access(state, MENU_VIP_INVENTORY))
+        flags = await _hidden_menu_flags(state)
         await callback.message.edit_text(
             inv_t(lang, "menu_title"),
-            reply_markup=inventory_menu_keyboard(lang, vip_unlocked=vip_unlocked),
+            reply_markup=inventory_menu_keyboard(
+                lang,
+                vip_unlocked=flags["vip_inventory"],
+                svip_unlocked=flags["svip_inventory"],
+                vvip_unlocked=flags["vvip_inventory"],
+            ),
         )
-    elif target == "inv_vip":
+    elif target in {"inv_vip", "inv_svip", "inv_vvip"}:
         from bot.handlers.inventory import _t as inv_t
-        if not state or not await has_hidden_access(state, MENU_VIP_INVENTORY):
+        tier = normalize_inventory_tier(target.removeprefix("inv_"), vip=True)
+        access_key = inventory_tier_access_key(tier)
+        if not state or not await has_hidden_access(state, access_key):
             await callback.message.edit_text(
                 _menu_text(lang),
                 reply_markup=main_menu_keyboard(lang, settings.club_tg_link),
             )
             await callback.answer(_expired_text(lang), show_alert=True)
             return
+        from bot.keyboards.inline import inventory_hidden_menu_keyboard
         await callback.message.edit_text(
-            inv_t(lang, "menu_title"),
-            reply_markup=inventory_menu_keyboard(lang, vip_unlocked=True),
+            inv_t(lang, "hidden_menu_title").format(tier=tier.upper()),
+            reply_markup=inventory_hidden_menu_keyboard(lang, tier=tier),
         )
     elif target == "sc_menu":
         from bot.handlers.service_center import show_sc_menu

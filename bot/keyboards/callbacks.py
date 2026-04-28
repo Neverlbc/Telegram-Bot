@@ -79,6 +79,7 @@ class InventoryCallback(CallbackData, prefix="inv"):
     cat_id: str = ""   # 品类 key (如 "outdoor")
     vip: bool = False  # 是否 VIP 完整视图
     page: int = 1
+    tier: str = ""
 
 
 class ServiceCenterCallback(CallbackData, prefix="sc"):

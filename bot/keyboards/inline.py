@@ -79,6 +79,8 @@ def main_menu_keyboard(
     lang: str = "zh",
     club_link: str = "",
     vip_inventory_unlocked: bool = False,
+    svip_inventory_unlocked: bool = False,
+    vvip_inventory_unlocked: bool = False,
     service_admin_unlocked: bool = False,
     vandych_unlocked: bool = False,
 ) -> InlineKeyboardMarkup:
@@ -125,7 +127,17 @@ def main_menu_keyboard(
     if vip_inventory_unlocked:
         builder.row(InlineKeyboardButton(
             text=t["vip_inventory"],
-            callback_data=InventoryCallback(action="categories", vip=True).pack(),
+            callback_data=InventoryCallback(action="tier_menu", vip=True, tier="vip").pack(),
+        ))
+    if svip_inventory_unlocked:
+        builder.row(InlineKeyboardButton(
+            text={"zh": "👑 SVIP 专属隐藏菜单", "en": "👑 SVIP Hidden Menu", "ru": "👑 SVIP-меню"}.get(lang, "👑 SVIP 专属隐藏菜单"),
+            callback_data=InventoryCallback(action="tier_menu", vip=True, tier="svip").pack(),
+        ))
+    if vvip_inventory_unlocked:
+        builder.row(InlineKeyboardButton(
+            text={"zh": "🌟 VVIP 专属隐藏菜单", "en": "🌟 VVIP Hidden Menu", "ru": "🌟 VVIP-меню"}.get(lang, "🌟 VVIP 专属隐藏菜单"),
+            callback_data=InventoryCallback(action="tier_menu", vip=True, tier="vvip").pack(),
         ))
     if service_admin_unlocked:
         builder.row(InlineKeyboardButton(
@@ -154,7 +166,12 @@ def main_menu_keyboard(
 
 # ── 莫斯科现货查询 ────────────────────────────────────
 
-def inventory_menu_keyboard(lang: str = "zh", vip_unlocked: bool = False) -> InlineKeyboardMarkup:
+def inventory_menu_keyboard(
+    lang: str = "zh",
+    vip_unlocked: bool = False,
+    svip_unlocked: bool = False,
+    vvip_unlocked: bool = False,
+) -> InlineKeyboardMarkup:
     """莫斯科现货查询 — 普通查询（VIP 查询由文本密码触发）."""
     texts = {
         "zh": {"public": "📋 普通查询", "vip": "⭐ VIP 专属隐藏菜单"},
@@ -170,14 +187,24 @@ def inventory_menu_keyboard(lang: str = "zh", vip_unlocked: bool = False) -> Inl
     if vip_unlocked:
         builder.row(InlineKeyboardButton(
             text=t["vip"],
-            callback_data=InventoryCallback(action="categories", vip=True).pack(),
+            callback_data=InventoryCallback(action="tier_menu", vip=True, tier="vip").pack(),
+        ))
+    if svip_unlocked:
+        builder.row(InlineKeyboardButton(
+            text={"zh": "👑 SVIP 专属隐藏菜单", "en": "👑 SVIP Hidden Menu", "ru": "👑 SVIP-меню"}.get(lang, "👑 SVIP 专属隐藏菜单"),
+            callback_data=InventoryCallback(action="tier_menu", vip=True, tier="svip").pack(),
+        ))
+    if vvip_unlocked:
+        builder.row(InlineKeyboardButton(
+            text={"zh": "🌟 VVIP 专属隐藏菜单", "en": "🌟 VVIP Hidden Menu", "ru": "🌟 VVIP-меню"}.get(lang, "🌟 VVIP 专属隐藏菜单"),
+            callback_data=InventoryCallback(action="tier_menu", vip=True, tier="vvip").pack(),
         ))
     for row in nav_buttons("menu", lang):
         builder.row(*row)
     return builder.as_markup()
 
 
-def inventory_category_keyboard(lang: str = "zh", vip: bool = False) -> InlineKeyboardMarkup:
+def inventory_category_keyboard(lang: str = "zh", vip: bool = False, tier: str = "") -> InlineKeyboardMarkup:
     """莫斯科现货查询 — 选择品类."""
     texts = {
         "zh": {"outdoor": "🏕 户外类"},
@@ -188,10 +215,33 @@ def inventory_category_keyboard(lang: str = "zh", vip: bool = False) -> InlineKe
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text=t["outdoor"],
-        callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip).pack(),
+        callback_data=InventoryCallback(action="category", cat_id="outdoor", vip=vip, tier=tier).pack(),
     ))
-    back_target = "inv_vip" if vip else "inv_public"
+    back_target = f"inv_{tier}" if tier else ("inv_vip" if vip else "inv_public")
     for row in nav_buttons(back_target, lang):
+        builder.row(*row)
+    return builder.as_markup()
+
+
+def inventory_hidden_menu_keyboard(lang: str = "zh", tier: str = "vip") -> InlineKeyboardMarkup:
+    """库存隐藏权限菜单：库存查询 + 价格查询."""
+    tier_label = (tier or "vip").upper()
+    texts = {
+        "zh": {"stock": "📦 莫仓库存查询", "price": f"💰 {tier_label} 价格查询"},
+        "en": {"stock": "📦 Moscow Stock", "price": f"💰 {tier_label} Price Query"},
+        "ru": {"stock": "📦 Наличие в Москве", "price": f"💰 Цены {tier_label}"},
+    }
+    t = texts.get(lang, texts["zh"])
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=t["stock"],
+        callback_data=InventoryCallback(action="categories", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=t["price"],
+        callback_data=InventoryCallback(action="price_brands", vip=True, tier=tier).pack(),
+    ))
+    for row in nav_buttons("menu", lang):
         builder.row(*row)
     return builder.as_markup()
 

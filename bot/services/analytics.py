@@ -92,6 +92,10 @@ def _password_kind(text: str | None) -> str:
         return ""
     if password == settings.vip_inventory_password.strip():
         return "vip_inventory"
+    if password == settings.svip_inventory_password.strip():
+        return "svip_inventory"
+    if password == settings.vvip_inventory_password.strip():
+        return "vvip_inventory"
     if password == settings.service_admin_password.strip():
         return "service_admin"
     if password == settings.vandych_password.strip():

@@ -23,6 +23,7 @@ import aiohttp
 from redis.asyncio import Redis
 
 from bot.config import settings
+from bot.services.inventory_tiers import PUBLIC_TIER, inventory_stock_sheet_title, normalize_inventory_tier
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,46 @@ def _parse_csv(csv_text: str) -> list[OutdoorItem]:
     return items
 
 
+def _header_index(headers: list[str], name: str, fallback: int) -> int:
+    normalized = [header.strip().casefold() for header in headers]
+    needle = name.strip().casefold()
+    try:
+        return normalized.index(needle)
+    except ValueError:
+        return fallback
+
+
+def _parse_values(values: list[list[str]]) -> list[OutdoorItem]:
+    if not values:
+        return []
+
+    headers = values[0]
+    sku_idx = _header_index(headers, COL_SKU, 0)
+    qty_idx = _header_index(headers, COL_QTY, 1)
+    state_idx = _header_index(headers, COL_STATE, 2)
+    notes_idx = _header_index(headers, COL_NOTES, 3)
+
+    items: list[OutdoorItem] = []
+    current_brand = ""
+    for values_row in values[1:]:
+        padded = [*values_row, "", "", "", ""]
+        sku = padded[sku_idx].strip() if sku_idx < len(padded) else ""
+        if not sku:
+            continue
+        qty_str = padded[qty_idx].strip() if qty_idx < len(padded) else ""
+        state = padded[state_idx].strip() if state_idx < len(padded) else ""
+        notes = padded[notes_idx].strip() if notes_idx < len(padded) else ""
+        if _is_brand_header(sku, qty_str, state, notes):
+            current_brand = sku
+            continue
+        try:
+            qty = int(qty_str or "0")
+        except ValueError:
+            qty = 0
+        items.append(OutdoorItem(sku=sku, qty=qty, state=state, notes=notes, brand=current_brand))
+    return items
+
+
 def _parse_sync_rows(csv_text: str) -> list[OutdoorSyncRow]:
     rows: list[OutdoorSyncRow] = []
     reader = csv.DictReader(io.StringIO(csv_text))
@@ -233,6 +274,37 @@ def _get_gspread_client() -> Any:
     ]
     creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
     return gspread.authorize(creds)
+
+
+def _normalize_sheet_title(value: str) -> str:
+    return (
+        (value or "")
+        .replace(" ", "")
+        .replace("[", "【")
+        .replace("]", "】")
+        .strip()
+        .casefold()
+    )
+
+
+def _find_worksheet_by_title(spreadsheet: Any, title: str) -> Any | None:
+    expected = _normalize_sheet_title(title)
+    for worksheet in spreadsheet.worksheets():
+        if _normalize_sheet_title(worksheet.title) == expected:
+            return worksheet
+    return None
+
+
+def _fetch_outdoor_values_by_title_sync(title: str) -> list[list[str]]:
+    if not settings.outdoor_sheet_id:
+        return []
+    gc = _get_gspread_client()
+    spreadsheet = gc.open_by_key(settings.outdoor_sheet_id)
+    worksheet = _find_worksheet_by_title(spreadsheet, title)
+    if worksheet is None:
+        logger.warning("Outdoor worksheet not found by title: %s", title)
+        return []
+    return worksheet.get_all_values()
 
 
 def _fetch_sync_rows_with_merges_sync(gid: int) -> list[OutdoorSyncRow]:
@@ -289,7 +361,7 @@ def _fetch_sync_rows_with_merges_sync(gid: int) -> list[OutdoorSyncRow]:
     return rows
 
 
-async def get_outdoor_inventory(vip: bool = False) -> list[OutdoorItem]:
+async def get_outdoor_inventory(vip: bool = False, tier: str | None = None) -> list[OutdoorItem]:
     """获取户外类库存列表.
 
     vip=True  → 读完整版 tab（全品牌）
@@ -300,31 +372,47 @@ async def get_outdoor_inventory(vip: bool = False) -> list[OutdoorItem]:
         logger.warning("outdoor_sheet_id not configured")
         return []
 
-    gid = OUTDOOR_GID_FULL if vip else OUTDOOR_GID_FILTERED
-    cache_key = f"outdoor_inv:{'vip' if vip else 'pub'}"
+    tier_code = normalize_inventory_tier(tier, vip)
+    gid = OUTDOOR_GID_FULL if tier_code != PUBLIC_TIER else OUTDOOR_GID_FILTERED
+    cache_key = f"outdoor_inv:{tier_code}"
     redis = _get_redis()
 
     if redis is not None:
         try:
             cached = await redis.get(cache_key)
             if cached:
-                return _parse_csv(cached)
+                return _parse_values(list(csv.reader(io.StringIO(cached))))
         except Exception as e:
             logger.warning("Redis read failed: %s", e)
 
-    try:
-        csv_text = await _fetch_outdoor_csv(gid)
-    except Exception as e:
-        logger.error("Failed to fetch outdoor sheet: %r", e)
-        return []
+    values: list[list[str]] = []
+    title = inventory_stock_sheet_title(tier_code)
+    creds_file = settings.google_credentials_file
+    if creds_file and os.path.isfile(creds_file):
+        try:
+            values = await asyncio.to_thread(_fetch_outdoor_values_by_title_sync, title)
+        except Exception as e:
+            logger.warning("Failed to fetch outdoor sheet by title %s: %r", title, e)
+
+    if not values:
+        if tier_code not in {PUBLIC_TIER, "vip"}:
+            return []
+        try:
+            csv_text = await _fetch_outdoor_csv(gid)
+        except Exception as e:
+            logger.error("Failed to fetch outdoor sheet: %r", e)
+            return []
+        values = list(csv.reader(io.StringIO(csv_text)))
 
     if redis is not None:
         try:
-            await redis.set(cache_key, csv_text, ex=CACHE_TTL)
+            csv_buffer = io.StringIO()
+            csv.writer(csv_buffer).writerows(values)
+            await redis.set(cache_key, csv_buffer.getvalue(), ex=CACHE_TTL)
         except Exception as e:
             logger.warning("Redis write failed: %s", e)
 
-    return _parse_csv(csv_text)
+    return _parse_values(values)
 
 
 async def get_outdoor_sync_rows(sheet_key: str) -> list[OutdoorSyncRow]:
@@ -364,7 +452,7 @@ async def get_outdoor_sync_rows(sheet_key: str) -> list[OutdoorSyncRow]:
 async def clear_outdoor_cache() -> None:
     redis = _get_redis()
     if redis is not None:
-        for key in ("outdoor_inv:vip", "outdoor_inv:pub"):
+        for key in ("outdoor_inv:public", "outdoor_inv:vip", "outdoor_inv:svip", "outdoor_inv:vvip", "outdoor_inv:pub"):
             try:
                 await redis.delete(key)
             except Exception:
