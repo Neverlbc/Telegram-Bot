@@ -514,7 +514,7 @@ def _format_price_items(items: list[OutdoorPriceItem], lang: str, tier: str, rat
 async def _send_price_photos(callback: CallbackQuery, items: list[OutdoorPriceItem], lang: str) -> None:
     if not callback.message:
         return
-    image_items = [item for item in items if item.image_url][:5]
+    image_items = [item for item in items if item.image_url]
     if not image_items:
         return
     caption_template = {
