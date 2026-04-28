@@ -146,6 +146,7 @@ TEXTS["zh"].update({
     "price_rate_notice": "您好，请注意，当前促销汇率大约为 <b>{rate}</b>",
     "price_rate_notice_no_rate": "您好，请注意，当前促销汇率暂未读取到，请以人工确认为准。",
     "price_title": "",
+    "price_image_sent": "见下方图片",
     "price_empty": "暂无可展示的价格数据。",
     "price_loading_err": "读取价格表失败，请稍后重试。",
 })
@@ -155,6 +156,7 @@ TEXTS["en"].update({
     "price_rate_notice": "Please note, the current promotional exchange rate is about <b>{rate}</b>.",
     "price_rate_notice_no_rate": "Please note, the promotional exchange rate was not found. Confirm manually before quoting.",
     "price_title": "",
+    "price_image_sent": "sent below",
     "price_empty": "No price data to show.",
     "price_loading_err": "Failed to load the price sheet. Please try again later.",
 })
@@ -164,6 +166,7 @@ TEXTS["ru"].update({
     "price_rate_notice": "Здравствуйте, обратите внимание: текущий акционный курс примерно <b>{rate}</b>.",
     "price_rate_notice_no_rate": "Здравствуйте, обратите внимание: акционный курс не найден. Проверьте вручную перед расчётом.",
     "price_title": "",
+    "price_image_sent": "изображение ниже",
     "price_empty": "Нет данных по ценам.",
     "price_loading_err": "Не удалось загрузить таблицу цен. Попробуйте позже.",
 })
@@ -453,47 +456,80 @@ def _format_price_line(tier_label: str, currency_key: str, value: str, lang: str
     return f"{tier_label}客户的{currency}大约价格：<b>{escape(display_value)}</b>"
 
 
-def _format_price_items(items: list[OutdoorPriceItem], lang: str, tier: str, rate: str) -> str:
-    if not items:
-        return _t(lang, "price_empty")
-
+def _price_item_lines(item: OutdoorPriceItem, lang: str, tier: str) -> list[str]:
     tier_label = inventory_tier_label(tier)
     labels = _price_field_labels(lang)
+    lines = [
+        f"{labels['sku']}：<b>{escape(item.sku)}</b>",
+    ]
+    if item.image_url:
+        lines.append(f"{labels['image']}：{_t(lang, 'price_image_sent')}")
+    else:
+        lines.append(f"{labels['image']}：{labels['none']}")
+
+    description = item.description or item.info or labels["none"]
+    lines.append(f"{labels['description']}：{escape(description)}")
+
+    prices = item.prices or {}
+    for currency_key in inventory_price_currency_keys(tier):
+        lines.append(_format_price_line(tier_label, currency_key, prices.get(currency_key, ""), lang))
+
+    lines.append(f"{labels['moscow_stock']}：{escape(item.moscow_stock or labels['none'])}")
+    lines.append(f"{labels['status']}：{escape(item.status or labels['none'])}")
+    return lines
+
+
+def _visible_price_items(items: list[OutdoorPriceItem], lang: str, tier: str, rate: str) -> list[OutdoorPriceItem]:
     blocks: list[str] = []
-    shown = 0
+    visible: list[OutdoorPriceItem] = []
     for item in items:
-        lines = [
-            f"{labels['sku']}：<b>{escape(item.sku)}</b>",
-        ]
-        if item.image_url:
-            lines.append(f"{labels['image']}：<a href=\"{escape(item.image_url, quote=True)}\">{labels['view_image']}</a>")
-        else:
-            lines.append(f"{labels['image']}：{labels['none']}")
-
-        description = item.description or item.info or labels["none"]
-        lines.append(f"{labels['description']}：{escape(description)}")
-
-        prices = item.prices or {}
-        for currency_key in inventory_price_currency_keys(tier):
-            lines.append(_format_price_line(tier_label, currency_key, prices.get(currency_key, ""), lang))
-
-        lines.append(f"{labels['moscow_stock']}：{escape(item.moscow_stock or labels['none'])}")
-        lines.append(f"{labels['status']}：{escape(item.status or labels['none'])}")
-
-        block = "\n".join(lines)
+        block = "\n".join(_price_item_lines(item, lang, tier))
         projected = "\n\n".join([_price_rate_notice(lang, rate), *blocks, block])
         if len(projected) > 3200:
             break
         blocks.append(block)
-        shown += 1
+        visible.append(item)
+    return visible
 
-    if len(items) > shown:
+
+def _format_price_items(items: list[OutdoorPriceItem], lang: str, tier: str, rate: str) -> str:
+    if not items:
+        return _t(lang, "price_empty")
+
+    visible_items = _visible_price_items(items, lang, tier, rate)
+    blocks: list[str] = []
+    for item in visible_items:
+        block = "\n".join(_price_item_lines(item, lang, tier))
+        blocks.append(block)
+
+    if len(items) > len(visible_items):
         blocks.append({
-            "zh": f"还有 {len(items) - shown} 条未展示，请进入表格查看完整数据。",
-            "en": f"{len(items) - shown} more rows are not shown. Open the sheet for full data.",
-            "ru": f"Ещё {len(items) - shown} строк не показано. Полные данные в таблице.",
-        }.get(lang, f"还有 {len(items) - shown} 条未展示。"))
+            "zh": f"还有 {len(items) - len(visible_items)} 条未展示，请进入表格查看完整数据。",
+            "en": f"{len(items) - len(visible_items)} more rows are not shown. Open the sheet for full data.",
+            "ru": f"Ещё {len(items) - len(visible_items)} строк не показано. Полные данные в таблице.",
+        }.get(lang, f"还有 {len(items) - len(visible_items)} 条未展示。"))
     return "\n\n".join([_price_rate_notice(lang, rate), *blocks])
+
+
+async def _send_price_photos(callback: CallbackQuery, items: list[OutdoorPriceItem], lang: str) -> None:
+    if not callback.message:
+        return
+    image_items = [item for item in items if item.image_url][:5]
+    if not image_items:
+        return
+    caption_template = {
+        "zh": "图片：{sku}",
+        "en": "Image: {sku}",
+        "ru": "Изображение: {sku}",
+    }.get(lang, "图片：{sku}")
+    for item in image_items:
+        try:
+            await callback.message.answer_photo(
+                photo=item.image_url,
+                caption=caption_template.format(sku=item.sku),
+            )
+        except Exception as exc:
+            logger.warning("send outdoor price photo failed sku=%s: %s", item.sku, exc)
 
 
 async def _ensure_vip_access(
@@ -667,8 +703,9 @@ async def on_inventory_price_brand(
         tier=inventory_tier_label(tier),
         brand=escape(brand),
     ) + _format_price_items(items, lang, tier, rate)
-    has_image = any(item.image_url for item in items)
-    await callback.message.edit_text(text, reply_markup=builder.as_markup(), disable_web_page_preview=not has_image)
+    visible_items = _visible_price_items(items, lang, tier, rate)
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), disable_web_page_preview=True)
+    await _send_price_photos(callback, visible_items, lang)
     await callback.answer()
 
 
