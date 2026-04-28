@@ -52,8 +52,8 @@ TEXTS: dict[str, dict[str, str]] = {
             "请选择搜索方式："
         ),
         "category_title": "📂 请选择品类：",
-        "vip_category_title": (
-            "👁️ 欢迎进入 VIP 专属隐藏菜单。\n\n"
+        "tier_category_title": (
+            "👁️ 欢迎进入 {tier} 专属隐藏菜单。\n\n"
             "目前为您开放：完整版品牌及现货库存清单。\n\n"
             "库存展示逻辑：\n"
             "莫斯科现货 - 已下单待发货 = 您看到的数字。\n"
@@ -83,8 +83,8 @@ TEXTS: dict[str, dict[str, str]] = {
             "Please select a search method:"
         ),
         "category_title": "📂 Select category:",
-        "vip_category_title": (
-            "👁️ Welcome to the VIP hidden menu.\n\n"
+        "tier_category_title": (
+            "👁️ Welcome to the {tier} hidden menu.\n\n"
             "Currently unlocked for you: full brand inventory list.\n\n"
             "How stock numbers work:\n"
             "Moscow physical stock - orders awaiting shipment = what you see.\n"
@@ -114,8 +114,8 @@ TEXTS: dict[str, dict[str, str]] = {
             "Пожалуйста, выберите способ поиска:"
         ),
         "category_title": "📂 Выберите категорию:",
-        "vip_category_title": (
-            "👁️ Добро пожаловать в VIP-меню.\n\n"
+        "tier_category_title": (
+            "👁️ Добро пожаловать в скрытое меню {tier}.\n\n"
             "Для вас открыт доступ к полному списку брендов и складских остатков в Москве.\n\n"
             "Как формируются остатки:\n"
             "Товар на складе минус уже заказанное, ожидающее отправки = цифра на экране.\n"
@@ -592,8 +592,13 @@ async def on_inventory_categories(
     vip = tier != "public"
     if vip and not await _ensure_tier_access(callback, state, lang, tier):
         return
+    title = (
+        _t(lang, "tier_category_title").format(tier=inventory_tier_label(tier))
+        if vip
+        else _t(lang, "category_title")
+    )
     await callback.message.edit_text(
-        _t(lang, "vip_category_title") if vip else _t(lang, "category_title"),
+        title,
         reply_markup=inventory_category_keyboard(lang, vip=vip, tier=tier if vip else ""),
     )
     await callback.answer()
