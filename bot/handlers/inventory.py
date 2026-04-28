@@ -562,10 +562,18 @@ def _price_item_message_text(item: OutdoorPriceItem, lang: str, tier: str, rate:
 def _price_table_column_labels(lang: str) -> dict[str, str]:
     return {
         "sku": "SKU",
-        "usd": {"zh": "美元", "en": "USD", "ru": "USD"}.get(lang, "美元"),
-        "rub": {"zh": "卢布", "en": "RUB", "ru": "руб."}.get(lang, "卢布"),
-        "cny_ru": {"zh": "俄址¥", "en": "RU ¥", "ru": "RU ¥"}.get(lang, "俄址¥"),
-        "cny_cn": {"zh": "中址¥", "en": "CN ¥", "ru": "CN ¥"}.get(lang, "中址¥"),
+        "usd": {"zh": "美元价格", "en": "USD price", "ru": "Цена USD"}.get(lang, "美元价格"),
+        "rub": {"zh": "卢布价格", "en": "RUB price", "ru": "Цена руб."}.get(lang, "卢布价格"),
+        "cny_ru": {
+            "zh": "俄罗斯地址价格",
+            "en": "Russia address price",
+            "ru": "Цена для адреса РФ",
+        }.get(lang, "俄罗斯地址价格"),
+        "cny_cn": {
+            "zh": "中国地址价格",
+            "en": "China address price",
+            "ru": "Цена для адреса КНР",
+        }.get(lang, "中国地址价格"),
         "stock": {"zh": "库存", "en": "Stock", "ru": "Склад"}.get(lang, "库存"),
         "status": {"zh": "状态", "en": "Status", "ru": "Статус"}.get(lang, "状态"),
     }
@@ -581,97 +589,24 @@ def _price_table_value(item: OutdoorPriceItem, key: str, none_text: str) -> str:
     return (item.prices or {}).get(key, "") or none_text
 
 
-def _price_table_line(cells: list[tuple[str, int, str]]) -> list[str]:
-    wrapped_cells = [_wrap_cell(value, width) for value, width, _ in cells]
-    height = max(len(cell) for cell in wrapped_cells)
-    lines: list[str] = []
-    for line_idx in range(height):
-        parts: list[str] = []
-        for cell_idx, (_, width, align) in enumerate(cells):
-            value = wrapped_cells[cell_idx][line_idx] if line_idx < len(wrapped_cells[cell_idx]) else ""
-            parts.append(_right_cell(value, width) if align == "right" else _fit_cell(value, width))
-        lines.append(" ".join(parts).rstrip())
-    return lines
-
-
-def _price_table_layout(lang: str, tier: str) -> tuple[list[tuple[str, int, str]], list[tuple[str, int, str]]]:
-    labels = _price_table_column_labels(lang)
-    first_line: list[tuple[str, int, str]] = [("sku", 10, "left")]
+def _price_table_keys(tier: str) -> list[str]:
+    keys = ["sku"]
     if tier == "vvip":
-        first_line.append(("usd", 5, "right"))
-    first_line.append(("rub", 9, "right"))
-
-    second_line: list[tuple[str, int, str]] = []
+        keys.append("usd")
+    keys.append("rub")
     if tier in {"svip", "vvip"}:
-        second_line.extend((("cny_ru", 7, "right"), ("cny_cn", 7, "right")))
-    second_line.extend((("stock", 5, "right"), ("status", 6, "left")))
-
-    first_header = [(labels[key], width, align) for key, width, align in first_line]
-    second_header = [(labels[key], width, align) for key, width, align in second_line]
-    return first_header, second_header
-
-
-def _price_table_rows(
-    item: OutdoorPriceItem,
-    lang: str,
-    tier: str,
-) -> tuple[list[tuple[str, int, str]], list[tuple[str, int, str]]]:
-    labels = _price_field_labels(lang)
-    first_header, second_header = _price_table_layout(lang, tier)
-    first_line = [
-        (_price_table_value(item, key, labels["none"]), width, align)
-        for key, width, align in _price_table_keys(first_header, tier, first=True)
-    ]
-    second_line = [
-        (_price_table_value(item, key, labels["none"]), width, align)
-        for key, width, align in _price_table_keys(second_header, tier, first=False)
-    ]
-    return first_line, second_line
-
-
-def _price_table_keys(
-    header: list[tuple[str, int, str]],
-    tier: str,
-    *,
-    first: bool,
-) -> list[tuple[str, int, str]]:
-    if first:
-        keys: list[tuple[str, int, str]] = [("sku", header[0][1], header[0][2])]
-        offset = 1
-        if tier == "vvip":
-            keys.append(("usd", header[offset][1], header[offset][2]))
-            offset += 1
-        keys.append(("rub", header[offset][1], header[offset][2]))
-        return keys
-    keys = []
-    offset = 0
-    if tier in {"svip", "vvip"}:
-        keys.extend((
-            ("cny_ru", header[offset][1], header[offset][2]),
-            ("cny_cn", header[offset + 1][1], header[offset + 1][2]),
-        ))
-        offset += 2
-    keys.extend((
-        ("stock", header[offset][1], header[offset][2]),
-        ("status", header[offset + 1][1], header[offset + 1][2]),
-    ))
+        keys.extend(("cny_ru", "cny_cn"))
+    keys.extend(("stock", "status"))
     return keys
 
 
 def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> str:
-    first_header, second_header = _price_table_layout(lang, tier)
-    rows = [
-        *_price_table_line(first_header),
-        *_price_table_line(second_header),
-        "\u2500" * 24,
-    ]
+    labels = _price_table_column_labels(lang)
+    none_text = _price_field_labels(lang)["none"]
+    keys = _price_table_keys(tier)
+    rows = [" ".join(labels[key] for key in keys), "\u2500" * 12]
     for item in items:
-        first_line, second_line = _price_table_rows(item, lang, tier)
-        rows.extend(_price_table_line(first_line))
-        rows.extend(_price_table_line(second_line))
-        rows.append("")
-    if rows and rows[-1] == "":
-        rows.pop()
+        rows.append(" ".join(_price_table_value(item, key, none_text) for key in keys))
     return f"<pre>{escape(chr(10).join(rows))}</pre>"
 
 
