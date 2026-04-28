@@ -90,6 +90,10 @@ def _overview_values(spreadsheet: Any) -> list[list[str]]:
     return worksheet.get_all_values()
 
 
+def _sku_key(value: str) -> str:
+    return re.sub(r"\s+", "", value or "").strip().casefold()
+
+
 def _extract_exchange_rate(values: list[list[str]]) -> str:
     for row_idx, row in enumerate(values):
         for col_idx, cell in enumerate(row):
@@ -130,6 +134,31 @@ def _find_header_row(values: list[list[str]]) -> int:
     return 0
 
 
+def _overview_tier_price_map(values: list[list[str]], tier: str) -> dict[str, str]:
+    """Read USD prices from Brand Price Overview by SKU for the given tier."""
+    if not values:
+        return {}
+
+    header_idx = _find_header_row(values)
+    headers = values[header_idx]
+    roles = _column_roles(headers)
+    sku_idx = roles.get("sku", 0)
+    price_idx = roles.get(f"{tier}_plain")
+    if price_idx is None:
+        price_idx = roles.get(tier)
+    if price_idx is None:
+        return {}
+
+    prices: dict[str, str] = {}
+    for row in values[header_idx + 1:]:
+        padded = [*row, "", "", "", "", "", ""]
+        sku = padded[sku_idx].strip() if sku_idx < len(padded) else ""
+        price = padded[price_idx].strip() if price_idx < len(padded) else ""
+        if sku and price:
+            prices[_sku_key(sku)] = price
+    return prices
+
+
 def _contains_any(value: str, needles: tuple[str, ...]) -> bool:
     return any(needle in value for needle in needles)
 
@@ -154,6 +183,8 @@ def _column_roles(headers: list[str]) -> dict[str, int]:
                 roles[f"{tier}_rub"] = idx
             if is_cny and f"{tier}_cny" not in roles:
                 roles[f"{tier}_cny"] = idx
+            if not (is_usd or is_rub or is_cny) and f"{tier}_plain" not in roles:
+                roles[f"{tier}_plain"] = idx
         if "sku" in text and "sku" not in roles:
             roles["sku"] = idx
         if _contains_any(text, ("图片", "image", "photo", "pic", "фото", "изображ", "картин")) and "image" not in roles:
@@ -216,7 +247,8 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
     if worksheet is None:
         raise ValueError(f"找不到价格表 tab: {brand_title}")
 
-    exchange_rate = _extract_exchange_rate(_overview_values(spreadsheet))
+    overview_values = _overview_values(spreadsheet)
+    exchange_rate = _extract_exchange_rate(overview_values)
     values = worksheet.get_all_values()
     if not values:
         return [], exchange_rate
@@ -225,6 +257,7 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
     headers = values[header_idx]
     roles = _column_roles(headers)
     wanted_prices = inventory_price_currency_keys(tier)
+    overview_usd_prices = _overview_tier_price_map(overview_values, tier) if "usd" in wanted_prices else {}
 
     items: list[OutdoorPriceItem] = []
     for row in values[header_idx + 1:]:
@@ -236,10 +269,13 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
 
         prices: dict[str, str] = {}
         for key in wanted_prices:
-            col_idx = roles.get(f"{tier}_{key}", roles.get(key))
             value = ""
-            if col_idx is not None and col_idx < len(padded):
-                value = padded[col_idx].strip()
+            if key == "usd":
+                value = overview_usd_prices.get(_sku_key(sku), "")
+            if not value:
+                col_idx = roles.get(f"{tier}_{key}", roles.get(key))
+                if col_idx is not None and col_idx < len(padded):
+                    value = padded[col_idx].strip()
             if value:
                 prices[key] = value
 
