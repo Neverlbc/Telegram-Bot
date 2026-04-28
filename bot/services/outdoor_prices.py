@@ -210,13 +210,31 @@ def _looks_like_url(value: str) -> bool:
     return text.startswith("http://") or text.startswith("https://")
 
 
-def _pick_image_url(row: list[str], roles: dict[str, int]) -> str:
+def _extract_image_url(value: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if _looks_like_url(text):
+        return text
+    match = re.search(r"https?://[^\"')\s,;]+", text, re.I)
+    return match.group(0) if match else ""
+
+
+def _pick_image_url(row: list[str], roles: dict[str, int], formula_row: list[str] | None = None) -> str:
     image_idx = roles.get("image")
-    if image_idx is not None and image_idx < len(row) and _looks_like_url(row[image_idx]):
-        return row[image_idx].strip()
-    for value in row:
-        if _looks_like_url(value) and re.search(r"\.(?:jpg|jpeg|png|webp)(?:\?|$)", value, re.I):
-            return value.strip()
+    formula_row = formula_row or []
+    candidates: list[str] = []
+    if image_idx is not None:
+        if image_idx < len(row):
+            candidates.append(row[image_idx])
+        if image_idx < len(formula_row):
+            candidates.append(formula_row[image_idx])
+    candidates.extend(row)
+    candidates.extend(formula_row)
+    for value in candidates:
+        url = _extract_image_url(value)
+        if url:
+            return url
     return ""
 
 
@@ -252,6 +270,7 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
     values = worksheet.get_all_values()
     if not values:
         return [], exchange_rate
+    formula_values = worksheet.get_all_values(value_render_option="FORMULA")
 
     header_idx = _find_header_row(values)
     headers = values[header_idx]
@@ -260,8 +279,10 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
     overview_usd_prices = _overview_tier_price_map(overview_values, tier) if "usd" in wanted_prices else {}
 
     items: list[OutdoorPriceItem] = []
-    for row in values[header_idx + 1:]:
+    for row_idx, row in enumerate(values[header_idx + 1:], start=header_idx + 1):
         padded = [*row, "", "", "", "", "", ""]
+        formula_row = formula_values[row_idx] if row_idx < len(formula_values) else []
+        padded_formula = [*formula_row, "", "", "", "", "", ""]
         sku_idx = roles.get("sku", 0)
         sku = padded[sku_idx].strip() if sku_idx < len(padded) else ""
         if not sku:
@@ -282,7 +303,7 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
         items.append(
             OutdoorPriceItem(
                 sku=sku,
-                image_url=_pick_image_url(padded, roles),
+                image_url=_pick_image_url(padded, roles, padded_formula),
                 description=_pick_role_value(padded, roles, "description"),
                 moscow_stock=_pick_role_value(padded, roles, "moscow_stock"),
                 status=_pick_role_value(padded, roles, "status"),

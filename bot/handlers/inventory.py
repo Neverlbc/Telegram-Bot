@@ -667,7 +667,8 @@ async def on_inventory_price_brand(
         tier=inventory_tier_label(tier),
         brand=escape(brand),
     ) + _format_price_items(items, lang, tier, rate)
-    await callback.message.edit_text(text, reply_markup=builder.as_markup(), disable_web_page_preview=True)
+    has_image = any(item.image_url for item in items)
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), disable_web_page_preview=not has_image)
     await callback.answer()
 
 
