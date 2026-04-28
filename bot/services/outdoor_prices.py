@@ -20,6 +20,9 @@ PRICE_OVERVIEW_TITLE = "Brand Price Overview"
 class OutdoorPriceItem:
     sku: str
     image_url: str = ""
+    description: str = ""
+    moscow_stock: str = ""
+    status: str = ""
     info: str = ""
     prices: dict[str, str] | None = None
 
@@ -145,6 +148,12 @@ def _column_roles(headers: list[str]) -> dict[str, int]:
             roles["sku"] = idx
         if _contains_any(text, ("图片", "image", "photo", "pic", "фото", "изображ", "картин")) and "image" not in roles:
             roles["image"] = idx
+        if _contains_any(text, ("描述", "description", "describe", "описывать", "опис")) and "description" not in roles:
+            roles["description"] = idx
+        if _contains_any(text, ("московский склад", "moscow stock", "moscow warehouse", "莫斯科库存", "莫仓库存")) and "moscow_stock" not in roles:
+            roles["moscow_stock"] = idx
+        if _contains_any(text, ("状态", "state", "status", "состояние")) and "status" not in roles:
+            roles["status"] = idx
         if _contains_any(text, ("руб", "ruble", "рубл", "卢布", "aliexpress")) and "rub" not in roles:
             roles["rub"] = idx
         if _contains_any(text, ("юань", "yuan", "rmb", "cny", "人民币")) and "cny" not in roles:
@@ -168,6 +177,13 @@ def _pick_image_url(row: list[str], roles: dict[str, int]) -> str:
         if _looks_like_url(value) and re.search(r"\.(?:jpg|jpeg|png|webp)(?:\?|$)", value, re.I):
             return value.strip()
     return ""
+
+
+def _pick_role_value(row: list[str], roles: dict[str, int], role: str) -> str:
+    idx = roles.get(role)
+    if idx is None or idx >= len(row):
+        return ""
+    return row[idx].strip()
 
 
 def _row_info(headers: list[str], row: list[str], roles: dict[str, int]) -> str:
@@ -199,7 +215,7 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
     headers = values[header_idx]
     roles = _column_roles(headers)
     wanted_prices = inventory_price_currency_keys(tier)
-    price_labels = {"usd": "美元价格", "rub": "卢布价格", "cny": "人民币价格"}
+    price_labels = {"usd": "美元", "rub": "卢布", "cny": "人民币"}
     rub_role = f"{tier}_rub"
 
     items: list[OutdoorPriceItem] = []
@@ -226,6 +242,9 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
             OutdoorPriceItem(
                 sku=sku,
                 image_url=_pick_image_url(padded, roles),
+                description=_pick_role_value(padded, roles, "description"),
+                moscow_stock=_pick_role_value(padded, roles, "moscow_stock"),
+                status=_pick_role_value(padded, roles, "status"),
                 info=_row_info(headers, padded, roles),
                 prices=prices,
             )
