@@ -23,11 +23,13 @@ from dataclasses import dataclass
 from bot.config import settings
 from bot.services.jushuitan import jushuitan_client
 from bot.services.kuayunbao import kuayunbao_client
-from bot.services.outdoor_sheets import OUTDOOR_SHEET_CONFIG, clear_outdoor_cache, get_outdoor_sync_rows
+from bot.services.outdoor_sheets import clear_outdoor_cache, get_outdoor_sync_rows
 from bot.services.outdoor_sku_aliases import DEFAULT_SKU_ALIASES
 from bot.services.sheets_writer import SheetRowUpdate, write_inventory_rows_to_sheet
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_SYNC_SHEET_KEYS = ("outdoor_vip",)
 
 AUTO_MANAGED_NOTE_TEXTS = {
     "",
@@ -216,9 +218,9 @@ async def sync_sheet(sheet_key: str) -> SyncResult:
 
 
 async def sync_all_sheets() -> list[SyncResult]:
-    """同步所有已配置的 Outdoor sheet."""
+    """同步默认 Outdoor 库存表：当前只更新 gid=0 的 VIP 完整表."""
     results = []
-    for sheet_key in OUTDOOR_SHEET_CONFIG:
+    for sheet_key in DEFAULT_SYNC_SHEET_KEYS:
         result = await sync_sheet(sheet_key)
         results.append(result)
     return results
