@@ -147,8 +147,12 @@ TEXTS["zh"].update({
     "price_rate_notice_no_rate": "您好，请注意，当前促销汇率暂未读取到，请以人工确认为准。",
     "price_title": "",
     "price_selected_brand": "💰 <b>{tier} 价格查询</b>\n品牌：<b>{brand}</b>",
-    "price_result_header": "接下来会为您输出 <b>{count}</b> 个产品信息，请留意。",
-    "price_done_prompt": "━━━━━━ 已输出完成 ━━━━━━\n本次共输出 <b>{count}</b> 个产品信息。\n您可以继续选择其他品牌查看，或返回主菜单。",
+    "price_view_title": "💰 <b>{tier} 价格查询</b>\n品牌：<b>{brand}</b>\n\n请选择展示方式：",
+    "price_table_mode": "📋 表格形式",
+    "price_image_mode": "🖼 图片形式",
+    "price_image_unavailable": "图片形式暂未开放，请先使用表格形式查看。",
+    "price_result_header": "表格包含 <b>{count}</b> 个产品信息。",
+    "price_done_prompt": "━━━━━━ 已输出完成 ━━━━━━\n您可以继续选择其他品牌查看，或返回主菜单。",
     "price_rate_note": "请注意！当前价格是基于当前的促销汇率【{rate}】进行估算",
     "price_rate_note_no_rate": "请注意！当前促销汇率暂未读取到，请以人工确认为准。",
     "price_image_attached": "见本条消息图片",
@@ -164,10 +168,13 @@ TEXTS["en"].update({
     ),
     "price_title": "",
     "price_selected_brand": "💰 <b>{tier} Price Query</b>\nBrand: <b>{brand}</b>",
-    "price_result_header": "<b>{count}</b> product messages will be sent next. Please watch this chat.",
+    "price_view_title": "💰 <b>{tier} Price Query</b>\nBrand: <b>{brand}</b>\n\nChoose a display mode:",
+    "price_table_mode": "📋 Table view",
+    "price_image_mode": "🖼 Image view",
+    "price_image_unavailable": "Image view is not available yet. Please use table view for now.",
+    "price_result_header": "This table contains <b>{count}</b> products.",
     "price_done_prompt": (
         "━━━━━━ Finished ━━━━━━\n"
-        "Sent <b>{count}</b> product messages.\n"
         "You can choose another brand or return to the main menu."
     ),
     "price_rate_note": "Note: this price is estimated using the current promotional exchange rate [{rate}].",
@@ -186,10 +193,13 @@ TEXTS["ru"].update({
     ),
     "price_title": "",
     "price_selected_brand": "💰 <b>Цены {tier}</b>\nБренд: <b>{brand}</b>",
-    "price_result_header": "Далее будет отправлено <b>{count}</b> сообщений с товарами. Пожалуйста, следите за чатом.",
+    "price_view_title": "💰 <b>Цены {tier}</b>\nБренд: <b>{brand}</b>\n\nВыберите формат:",
+    "price_table_mode": "📋 Таблица",
+    "price_image_mode": "🖼 Изображения",
+    "price_image_unavailable": "Формат с изображениями пока недоступен. Используйте таблицу.",
+    "price_result_header": "В таблице товаров: <b>{count}</b>.",
     "price_done_prompt": (
         "━━━━━━ Готово ━━━━━━\n"
-        "Отправлено сообщений с товарами: <b>{count}</b>.\n"
         "Вы можете выбрать другой бренд или вернуться в главное меню."
     ),
     "price_rate_note": "Внимание! Цена рассчитана по текущему акционному курсу [{rate}].",
@@ -471,6 +481,27 @@ def _price_result_keyboard(lang: str, tier: str) -> InlineKeyboardBuilder:
     return builder
 
 
+def _price_view_mode_keyboard(lang: str, tier: str, brand_page: int) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "price_table_mode"),
+        callback_data=InventoryCallback(action="price_table", vip=True, tier=tier, page=brand_page).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "price_image_mode"),
+        callback_data=InventoryCallback(action="price_images", vip=True, tier=tier, page=brand_page).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "⬅️ 返回品牌", "en": "⬅️ Brands", "ru": "⬅️ Бренды"}.get(lang, "⬅️ 返回品牌"),
+        callback_data=InventoryCallback(action="price_brands", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 主菜单"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+    return builder
+
+
 def _price_field_labels(lang: str) -> dict[str, str]:
     return {
         "sku": {"zh": "SKU型号", "en": "SKU", "ru": "SKU"}.get(lang, "SKU型号"),
@@ -526,6 +557,89 @@ def _price_item_lines(item: OutdoorPriceItem, lang: str, tier: str, rate: str, i
 
 def _price_item_message_text(item: OutdoorPriceItem, lang: str, tier: str, rate: str, image_text: str) -> str:
     return "\n".join(_price_item_lines(item, lang, tier, rate, image_text))
+
+
+def _price_table_column_labels(lang: str) -> dict[str, str]:
+    return {
+        "sku": "SKU",
+        "usd": {"zh": "美元", "en": "USD", "ru": "USD"}.get(lang, "美元"),
+        "rub": {"zh": "卢布", "en": "RUB", "ru": "руб."}.get(lang, "卢布"),
+        "cny_ru": {"zh": "俄址¥", "en": "RU ¥", "ru": "RU ¥"}.get(lang, "俄址¥"),
+        "cny_cn": {"zh": "中址¥", "en": "CN ¥", "ru": "CN ¥"}.get(lang, "中址¥"),
+        "stock": {"zh": "库存", "en": "Stock", "ru": "Склад"}.get(lang, "库存"),
+        "status": {"zh": "状态", "en": "Status", "ru": "Статус"}.get(lang, "状态"),
+    }
+
+
+def _price_table_columns(lang: str, tier: str) -> list[tuple[str, str, int, str]]:
+    labels = _price_table_column_labels(lang)
+    columns: list[tuple[str, str, int, str]] = [("sku", labels["sku"], 14, "left")]
+    for currency_key in inventory_price_currency_keys(tier):
+        cap = 8 if currency_key == "usd" else 10
+        columns.append((currency_key, labels[currency_key], cap, "right"))
+    columns.extend((
+        ("stock", labels["stock"], 6, "right"),
+        ("status", labels["status"], 8, "left"),
+    ))
+    return columns
+
+
+def _price_table_value(item: OutdoorPriceItem, key: str, none_text: str) -> str:
+    if key == "sku":
+        return item.sku or none_text
+    if key == "stock":
+        return item.moscow_stock or none_text
+    if key == "status":
+        return item.status or none_text
+    return (item.prices or {}).get(key, "") or none_text
+
+
+def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> str:
+    labels = _price_field_labels(lang)
+    columns = _price_table_columns(lang, tier)
+    raw_rows = [
+        [_price_table_value(item, column_key, labels["none"]) for column_key, *_ in columns]
+        for item in items
+    ]
+    widths: list[int] = []
+    for idx, (_, header, cap, _) in enumerate(columns):
+        values = [row[idx] for row in raw_rows]
+        max_width = max([_display_width(header), *(_display_width(value) for value in values)], default=0)
+        widths.append(max(_display_width(header), min(max_width, cap)))
+
+    header = " ".join(_fit_cell(column[1], widths[idx]) for idx, column in enumerate(columns))
+    sep = "\u2500" * min(_display_width(header), 48)
+    rows = [header, sep]
+    for raw_row in raw_rows:
+        wrapped_cells = [_wrap_cell(raw_row[idx], widths[idx]) for idx in range(len(columns))]
+        height = max(len(cell) for cell in wrapped_cells)
+        for line_idx in range(height):
+            cells: list[str] = []
+            for col_idx, column in enumerate(columns):
+                value = wrapped_cells[col_idx][line_idx] if line_idx < len(wrapped_cells[col_idx]) else ""
+                if column[3] == "right":
+                    cells.append(_right_cell(value, widths[col_idx]))
+                else:
+                    cells.append(_fit_cell(value, widths[col_idx]))
+            rows.append(" ".join(cells))
+        rows.append(sep)
+
+    return f"<pre>{escape(chr(10).join(rows))}</pre>"
+
+
+def _price_table_chunks(items: list[OutdoorPriceItem], lang: str, tier: str, max_len: int = 3000) -> list[str]:
+    chunks: list[str] = []
+    current: list[OutdoorPriceItem] = []
+    for item in items:
+        projected = [*current, item]
+        if current and len(_format_price_table(projected, lang, tier)) > max_len:
+            chunks.append(_format_price_table(current, lang, tier))
+            current = [item]
+        else:
+            current = projected
+    if current:
+        chunks.append(_format_price_table(current, lang, tier))
+    return chunks
 
 
 async def _send_price_item_messages(
@@ -711,33 +825,79 @@ async def on_inventory_price_brand(
         await callback.answer(_t(lang, "price_loading_err"), show_alert=True)
         return
     brand = brands[brand_idx]
+    await callback.message.edit_text(
+        _t(lang, "price_view_title").format(
+            tier=inventory_tier_label(tier),
+            brand=escape(brand),
+        ),
+        reply_markup=_price_view_mode_keyboard(lang, tier, callback_data.page).as_markup(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "price_images"))
+async def on_inventory_price_images(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+    await callback.answer(_t(lang, "price_image_unavailable"), show_alert=True)
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "price_table"))
+async def on_inventory_price_table(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+
+    brands = await get_outdoor_price_brand_titles()
+    brand_idx = callback_data.page - 1
+    if brand_idx < 0 or brand_idx >= len(brands):
+        await callback.answer(_t(lang, "price_loading_err"), show_alert=True)
+        return
+    brand = brands[brand_idx]
     items, rate = await get_outdoor_price_items(brand, tier)
 
     if not items:
         await callback.message.edit_text(
             _t(lang, "price_empty"),
-            reply_markup=_price_result_keyboard(lang, tier).as_markup(),
+            reply_markup=_price_view_mode_keyboard(lang, tier, callback_data.page).as_markup(),
         )
         await callback.answer()
         return
 
-    header = "\n\n".join((
+    table_chunks = _price_table_chunks(items, lang, tier)
+    first_text = "\n\n".join((
         _t(lang, "price_selected_brand").format(
             tier=inventory_tier_label(tier),
             brand=escape(brand),
         ),
         _price_rate_notice(lang, rate),
         _t(lang, "price_result_header").format(count=len(items)),
+        table_chunks[0],
+        _price_rate_note(lang, rate),
     ))
     await callback.message.edit_text(
-        header,
+        first_text,
         reply_markup=_price_result_keyboard(lang, tier).as_markup(),
         disable_web_page_preview=True,
     )
     await callback.answer()
-    await _send_price_item_messages(callback, items, lang, tier, rate)
+    for table_chunk in table_chunks[1:]:
+        await callback.message.answer(table_chunk)
     await callback.message.answer(
-        _t(lang, "price_done_prompt").format(count=len(items)),
+        _t(lang, "price_done_prompt"),
         reply_markup=_price_result_keyboard(lang, tier).as_markup(),
     )
 
