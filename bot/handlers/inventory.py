@@ -614,39 +614,50 @@ def _price_table_compact_label(key: str, lang: str) -> str:
 
 
 def _price_table_widths(keys: list[str], items: list[OutdoorPriceItem] | None = None) -> dict[str, int]:
-    sku_width = 10
-    if items:
-        sku_width = max(sku_width, max(_display_width(item.sku or "") for item in items))
     widths = {
-        "sku": sku_width,
-        "usd": 4,
-        "rub": 8,
-        "cny_ru": 5,
-        "cny_cn": 5,
-        "stock": 4,
+        "sku": 18,
+        "usd": 5,
+        "rub": 9,
+        "cny_ru": 11,
+        "cny_cn": 11,
+        "stock": 11,
         "status": 4,
     }
     return {key: widths[key] for key in keys}
 
 
-def _clip_cell(value: str, width: int) -> str:
-    value = value.strip()
-    if _display_width(value) <= width:
-        return value
-    result = ""
-    used = 0
-    for char in value:
-        char_width = 2 if east_asian_width(char) in {"F", "W"} else 1
-        if used + char_width > width - 1:
-            break
-        result += char
-        used += char_width
-    return result + "…"
-
-
 def _price_table_cell(value: str, width: int, *, right: bool = False) -> str:
-    value = _clip_cell(value, width)
     return _right_cell(value, width) if right else _fit_cell(value, width)
+
+
+def _price_table_sections(keys: list[str]) -> list[list[str]]:
+    if "cny_ru" not in keys and "cny_cn" not in keys:
+        return [keys]
+    first = [key for key in ("sku", "usd", "rub") if key in keys]
+    second = [key for key in ("cny_ru", "cny_cn", "stock") if key in keys]
+    return [first, second]
+
+
+def _price_table_line(
+    values: dict[str, str],
+    section: list[str],
+    widths: dict[str, int],
+    right_aligned: set[str],
+) -> list[str]:
+    wrapped = {
+        key: _wrap_cell(values.get(key, ""), widths[key])
+        for key in section
+    }
+    line_count = max(len(lines) for lines in wrapped.values())
+    rows: list[str] = []
+    for line_idx in range(line_count):
+        cells = []
+        for key in section:
+            lines = wrapped[key]
+            value = lines[line_idx] if line_idx < len(lines) else ""
+            cells.append(_price_table_cell(value, widths[key], right=key in right_aligned))
+        rows.append(" ".join(cells).rstrip())
+    return rows
 
 
 def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> str:
@@ -654,24 +665,19 @@ def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> 
     keys = _price_table_keys(tier)
     widths = _price_table_widths(keys, items)
     right_aligned = {"usd", "rub", "cny_ru", "cny_cn", "stock"}
+    sections = _price_table_sections(keys)
 
-    header = " ".join(
-        _price_table_cell(_price_table_compact_label(key, lang), widths[key])
-        for key in keys
-    )
-    separator = "-" * max(1, _display_width(header) - 6)
-    rows: list[str] = [header, separator]
+    header_values = {key: _price_table_compact_label(key, lang) for key in keys}
+    header_rows: list[str] = []
+    for section in sections:
+        header_rows.extend(_price_table_line(header_values, section, widths, set()))
+    separator_width = max(_display_width(row) for row in header_rows)
+    separator = "-" * separator_width
+    rows: list[str] = [*header_rows, separator]
     for item in items:
-        rows.append(
-            " ".join(
-                _price_table_cell(
-                    _price_table_value(item, key, none_text),
-                    widths[key],
-                    right=key in right_aligned,
-                )
-                for key in keys
-            )
-        )
+        item_values = {key: _price_table_value(item, key, none_text) for key in keys}
+        for section in sections:
+            rows.extend(_price_table_line(item_values, section, widths, right_aligned))
         rows.append(separator)
     return f"<pre>{escape(chr(10).join(rows))}</pre>"
 
