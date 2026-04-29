@@ -945,10 +945,6 @@ async def on_inventory_price_table(
     await callback.answer()
     for table_chunk in table_chunks[1:]:
         await callback.message.answer(table_chunk)
-    await callback.message.answer(
-        _t(lang, "price_done_prompt"),
-        reply_markup=_price_result_keyboard(lang, tier).as_markup(),
-    )
 
 
 @router.callback_query(InventoryCallback.filter(F.action == "category"))
