@@ -659,7 +659,7 @@ def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> 
         _price_table_cell(_price_table_compact_label(key, lang), widths[key])
         for key in keys
     )
-    separator = "-" * _display_width(header)
+    separator = "-" * max(1, _display_width(header) - 6)
     rows: list[str] = [header, separator]
     for item in items:
         rows.append(
