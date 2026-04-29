@@ -617,7 +617,7 @@ def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> 
             for key in keys
         ]
         product_blocks.append("\n".join(lines))
-    return "\n\n".join(product_blocks)
+    return "\n\n────────────\n\n".join(product_blocks)
 
 
 def _price_table_chunks(items: list[OutdoorPriceItem], lang: str, tier: str, max_len: int = 3000) -> list[str]:
