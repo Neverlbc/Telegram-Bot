@@ -600,13 +600,76 @@ def _price_table_keys(tier: str) -> list[str]:
     return keys
 
 
+def _price_table_compact_label(key: str, lang: str) -> str:
+    labels = {
+        "sku": {"zh": "SKU", "en": "SKU", "ru": "SKU"},
+        "usd": {"zh": "USD", "en": "USD", "ru": "USD"},
+        "rub": {"zh": "RUB", "en": "RUB", "ru": "RUB"},
+        "cny_ru": {"zh": "俄价", "en": "RU", "ru": "RU"},
+        "cny_cn": {"zh": "中价", "en": "CN", "ru": "CN"},
+        "stock": {"zh": "库", "en": "Stk", "ru": "Скл"},
+        "status": {"zh": "状", "en": "Stat", "ru": "Ст"},
+    }
+    return labels[key].get(lang, labels[key]["zh"])
+
+
+def _price_table_widths(keys: list[str]) -> dict[str, int]:
+    widths = {
+        "sku": 10,
+        "usd": 5,
+        "rub": 8,
+        "cny_ru": 6,
+        "cny_cn": 6,
+        "stock": 4,
+        "status": 4,
+    }
+    return {key: widths[key] for key in keys}
+
+
+def _clip_cell(value: str, width: int) -> str:
+    value = value.strip()
+    if _display_width(value) <= width:
+        return value
+    result = ""
+    used = 0
+    for char in value:
+        char_width = 2 if east_asian_width(char) in {"F", "W"} else 1
+        if used + char_width > width - 1:
+            break
+        result += char
+        used += char_width
+    return result + "…"
+
+
+def _price_table_cell(value: str, width: int, *, right: bool = False) -> str:
+    value = _clip_cell(value, width)
+    return _right_cell(value, width) if right else _fit_cell(value, width)
+
+
 def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> str:
-    labels = _price_table_column_labels(lang)
     none_text = _price_field_labels(lang)["none"]
     keys = _price_table_keys(tier)
-    rows = [" ".join(labels[key] for key in keys), "\u2500" * 12]
+    widths = _price_table_widths(keys)
+    right_aligned = {"usd", "rub", "cny_ru", "cny_cn", "stock"}
+
+    header = " ".join(
+        _price_table_cell(_price_table_compact_label(key, lang), widths[key])
+        for key in keys
+    )
+    separator = "\u2500" * _display_width(header)
+    rows: list[str] = [header, separator]
     for item in items:
-        rows.append(" ".join(_price_table_value(item, key, none_text) for key in keys))
+        rows.append(
+            " ".join(
+                _price_table_cell(
+                    _price_table_value(item, key, none_text),
+                    widths[key],
+                    right=key in right_aligned,
+                )
+                for key in keys
+            )
+        )
+        rows.append(separator)
     return f"<pre>{escape(chr(10).join(rows))}</pre>"
 
 
