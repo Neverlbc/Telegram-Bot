@@ -596,7 +596,7 @@ def _price_table_keys(tier: str) -> list[str]:
     keys.append("rub")
     if tier in {"svip", "vvip"}:
         keys.extend(("cny_ru", "cny_cn"))
-    keys.extend(("stock", "status"))
+    keys.append("stock")
     return keys
 
 
@@ -613,13 +613,16 @@ def _price_table_compact_label(key: str, lang: str) -> str:
     return labels[key].get(lang, labels[key]["zh"])
 
 
-def _price_table_widths(keys: list[str]) -> dict[str, int]:
+def _price_table_widths(keys: list[str], items: list[OutdoorPriceItem] | None = None) -> dict[str, int]:
+    sku_width = 10
+    if items:
+        sku_width = max(sku_width, max(_display_width(item.sku or "") for item in items))
     widths = {
-        "sku": 10,
-        "usd": 5,
+        "sku": sku_width,
+        "usd": 4,
         "rub": 8,
-        "cny_ru": 6,
-        "cny_cn": 6,
+        "cny_ru": 5,
+        "cny_cn": 5,
         "stock": 4,
         "status": 4,
     }
@@ -649,14 +652,14 @@ def _price_table_cell(value: str, width: int, *, right: bool = False) -> str:
 def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> str:
     none_text = _price_field_labels(lang)["none"]
     keys = _price_table_keys(tier)
-    widths = _price_table_widths(keys)
+    widths = _price_table_widths(keys, items)
     right_aligned = {"usd", "rub", "cny_ru", "cny_cn", "stock"}
 
     header = " ".join(
         _price_table_cell(_price_table_compact_label(key, lang), widths[key])
         for key in keys
     )
-    separator = "\u2500" * _display_width(header)
+    separator = "-" * _display_width(header)
     rows: list[str] = [header, separator]
     for item in items:
         rows.append(
