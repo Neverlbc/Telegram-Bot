@@ -129,7 +129,7 @@ TIER_LABELS = {
     "svip_inventory": "SVIP",
     "vip_inventory": "VIP",
     "vandych": "Vandych",
-    "service_admin": "服务管理员",
+    "service_admin": "服务中心",
     "public": "普通",
 }
 
