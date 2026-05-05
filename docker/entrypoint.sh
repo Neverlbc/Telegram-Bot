@@ -12,6 +12,7 @@ from bot.models.order import WholesaleOrder, AftersaleQuery, LogisticsQuery
 from bot.models.device import DeviceSerialQuery, DeviceTicket
 from bot.models.ticket import SupportTicket, SupportMessage
 from bot.models.analytics import AnalyticsEvent
+from bot.models.analytics_annotation import AnalyticsAnnotation
 from sqlalchemy.ext.asyncio import create_async_engine
 from bot.config import settings
 
