@@ -542,7 +542,7 @@ def _price_item_lines(item: OutdoorPriceItem, lang: str, tier: str, rate: str, i
     labels = _price_field_labels(lang)
     lines = [
         f"{labels['sku']}：<b>{escape(item.sku)}</b>",
-        f"{labels['description']}：{escape(item.description or labels['none'])}",
+        f"{labels['description']}：{escape(item.description_for(lang) or labels['none'])}",
         f"{labels['image']}：{image_text}",
     ]
 
@@ -560,11 +560,11 @@ def _price_item_message_text(item: OutdoorPriceItem, lang: str, tier: str, rate:
     return "\n".join(_price_item_lines(item, lang, tier, rate, image_text))
 
 
-def _price_table_value(item: OutdoorPriceItem, key: str, none_text: str) -> str:
+def _price_table_value(item: OutdoorPriceItem, key: str, none_text: str, lang: str = "zh") -> str:
     if key == "sku":
         return item.sku or none_text
     if key == "description":
-        return item.description or none_text
+        return item.description_for(lang) or none_text
     if key == "stock":
         return item.moscow_stock or none_text
     if key == "status":
@@ -617,7 +617,7 @@ def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> 
 
     for item in items:
         lines = [
-            f"<b>{escape(labels[key])}：</b>{escape(_price_table_value(item, key, none_text))}"
+            f"<b>{escape(labels[key])}：</b>{escape(_price_table_value(item, key, none_text, lang))}"
             for key in keys
         ]
         product_blocks.append("\n".join(lines))

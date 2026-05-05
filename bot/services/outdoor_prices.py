@@ -20,11 +20,25 @@ PRICE_OVERVIEW_TITLE = "Brand Price Overview"
 class OutdoorPriceItem:
     sku: str
     image_url: str = ""
-    description: str = ""
+    descriptions: dict[str, str] | None = None  # {"zh": ..., "en": ..., "ru": ...}
     moscow_stock: str = ""
     status: str = ""
     info: str = ""
     prices: dict[str, str] | None = None
+
+    def description_for(self, lang: str) -> str:
+        """根据用户语言返回描述，缺失时按 lang→en→ru→zh 回退."""
+        descs = self.descriptions or {}
+        order_map = {
+            "zh": ("zh", "en", "ru"),
+            "en": ("en", "ru", "zh"),
+            "ru": ("ru", "en", "zh"),
+        }
+        for code in order_map.get(lang, ("zh", "en", "ru")):
+            value = descs.get(code, "").strip()
+            if value:
+                return value
+        return ""
 
 
 def _get_gspread_client() -> Any:
@@ -241,6 +255,20 @@ def _set_cny_role(roles: dict[str, int], key_prefix: str, text: str, idx: int) -
         roles[f"{prefix}cny"] = idx
 
 
+def _detect_description_lang(normalized_text: str) -> str | None:
+    """识别描述列的语言。返回 'zh'/'en'/'ru'，非描述列返回 None。
+
+    优先匹配语言独有特征（俄文 опис、中文 描述），再检查通用 description。
+    """
+    if "опис" in normalized_text:  # описание / описывать / опис
+        return "ru"
+    if "描述" in normalized_text:
+        return "zh"
+    if "description" in normalized_text or "describe" in normalized_text:
+        return "en"
+    return None
+
+
 def _column_roles(headers: list[str]) -> dict[str, int]:
     roles: dict[str, int] = {}
     for idx, header in enumerate(headers):
@@ -263,8 +291,10 @@ def _column_roles(headers: list[str]) -> dict[str, int]:
             roles["sku"] = idx
         if _contains_any(text, ("图片", "image", "photo", "pic", "фото", "изображ", "картин")) and "image" not in roles:
             roles["image"] = idx
-        if _contains_any(text, ("描述", "description", "describe", "описывать", "опис")) and "description" not in roles:
-            roles["description"] = idx
+        # 描述列按语言分别识别（俄/英/中），优先匹配独有标识
+        desc_lang = _detect_description_lang(text)
+        if desc_lang and f"description_{desc_lang}" not in roles:
+            roles[f"description_{desc_lang}"] = idx
         if (
             _contains_any(text, ("московский склад", "moscow stock", "moscow warehouse", "莫斯科库存", "莫仓库存"))
             and "moscow_stock" not in roles
@@ -392,11 +422,17 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
             if value:
                 prices[key] = value
 
+        descriptions: dict[str, str] = {}
+        for code in ("zh", "en", "ru"):
+            value = _pick_role_value(padded, roles, f"description_{code}")
+            if value:
+                descriptions[code] = value
+
         items.append(
             OutdoorPriceItem(
                 sku=sku,
                 image_url=_pick_image_url(padded, roles, padded_formula),
-                description=_pick_role_value(padded, roles, "description"),
+                descriptions=descriptions or None,
                 moscow_stock=_pick_role_value(padded, roles, "moscow_stock"),
                 status=_pick_role_value(padded, roles, "status"),
                 info=_row_info(headers, padded, roles),
