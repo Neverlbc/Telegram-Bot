@@ -100,7 +100,7 @@ class JushuitanClient:
                 pass
 
     async def _fetch_token(self) -> dict[str, Any]:
-        """从聚水潭获取初始 access_token."""
+        """通过 getInitToken + 随机 code 获取新的 access_token（本项目无需 OAuth 流程）."""
         import random, string
         code = "".join(random.choices(string.ascii_letters + string.digits, k=6))
         params: dict[str, Any] = {
@@ -112,81 +112,81 @@ class JushuitanClient:
         }
         params["sign"] = self._sign(params)
 
-        url = f"{self.base_url}/openWeb/auth/getInitToken"
+        init_path = "/openWebIsv/auth/getInitToken" if settings.jst_is_test else "/openWeb/auth/getInitToken"
+        url = f"{self.base_url}{init_path}"
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 resp.raise_for_status()
                 return await resp.json(content_type=None)
 
-    async def _refresh_token(self, refresh_token: str) -> dict[str, Any]:
-        """用 refresh_token 刷新 access_token."""
-        params: dict[str, Any] = {
-            "app_key": self.app_key,
-            "timestamp": str(int(time.time())),
-            "grant_type": "refresh_token",
-            "charset": "utf-8",
-            "refresh_token": refresh_token,
-        }
-        params["sign"] = self._sign(params)
-
-        url = f"{self.base_url}/openWeb/auth/getInitToken"
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                resp.raise_for_status()
-                return await resp.json(content_type=None)
-
-    async def get_access_token(self) -> str | None:
-        """获取有效的 access_token，自动刷新过期 token."""
-        cached = await self._load_token()
-
-        if cached:
-            expires_at = cached.get("expires_at", 0)
-            if time.time() < expires_at - _TOKEN_REFRESH_BUFFER:
-                return cached.get("access_token")
-
-            # 尝试用 refresh_token 刷新
-            refresh_token = cached.get("refresh_token")
-            if refresh_token:
-                try:
-                    result = await self._refresh_token(refresh_token)
-                    if result.get("code") == 0:
-                        data = result["data"]
-                        data["expires_at"] = time.time() + data.get("expires_in", 7200)
-                        await self._save_token(data)
-                        logger.info("[JST] access_token 已刷新")
-                        return data["access_token"]
-                except Exception as e:
-                    logger.warning("[JST] token 刷新失败，尝试重新获取: %s", e)
-
-        # 重新获取 token
+    async def _try_fetch(self) -> dict[str, Any] | None:
+        """获取并缓存新 token，成功返回 data 字典，失败返回 None."""
         try:
             result = await self._fetch_token()
-            if result.get("code") == 0:
-                data = result["data"]
-                data["expires_at"] = time.time() + data.get("expires_in", 7200)
-                await self._save_token(data)
-                logger.info("[JST] access_token 已获取")
-                return data["access_token"]
-            else:
-                logger.error("[JST] 获取 token 失败: %s", result)
         except Exception as e:
-            logger.error("[JST] 获取 token 异常: %s", e)
+            logger.warning("[JST] getInitToken HTTP 失败: %s", e)
+            return None
+        if result.get("code") != 0:
+            logger.warning(
+                "[JST] getInitToken 业务失败: code=%s msg=%s",
+                result.get("code"), result.get("msg") or result.get("message"),
+            )
+            return None
+        data = dict(result.get("data") or {})
+        if not data.get("access_token"):
+            return None
+        data["expires_at"] = time.time() + int(data.get("expires_in") or 7200)
+        await self._save_token(data)
+        logger.info("[JST] access_token 已获取（getInitToken）")
+        return data
 
+    async def invalidate_token_cache(self) -> None:
+        """清除 token 缓存，下次调用会重新获取。"""
+        _mem_token.pop("token", None)
+        redis = await self._redis()
+        if redis:
+            try:
+                await redis.delete("jst:token")
+            except Exception:
+                pass
+
+    async def get_access_token(self) -> str | None:
+        """获取有效的 access_token。
+
+        优先级：
+        1. 缓存中未过期的 access_token（提前 5 分钟视为过期）
+        2. 通过 getInitToken + 随机 code 获取新 token
+        3. 兜底使用 .env 中的 JST_ACCESS_TOKEN（手动配置）
+        """
+        cached = await self._load_token()
+        now = time.time()
+
+        if cached and now < float(cached.get("expires_at", 0)) - _TOKEN_REFRESH_BUFFER:
+            token = cached.get("access_token")
+            if token:
+                return token
+
+        data = await self._try_fetch()
+        if data:
+            return data["access_token"]
+
+        env_token = settings.jst_access_token.strip()
+        if env_token:
+            logger.warning("[JST] getInitToken 失败，回退使用 JST_ACCESS_TOKEN")
+            return env_token
+
+        logger.error("[JST] 无可用 access_token；请检查 JST_APP_KEY / JST_APP_SECRET 是否正确")
         return None
 
     # ── HTTP 请求 ─────────────────────────────────────────
 
-    async def _post(self, path: str, biz_params: dict[str, Any]) -> dict[str, Any]:
-        """签名后以 form data 方式发送请求，业务参数放在 biz 字段."""
-        if not self.is_configured:
-            logger.warning("[JST] 未配置聚水潭参数，跳过: %s", path)
-            return {}
+    @staticmethod
+    def _is_token_error(msg: Any) -> bool:
+        text = str(msg or "")
+        keywords = ("access_token", "token", "过期", "无效", "验证失败")
+        return any(k in text for k in keywords)
 
-        access_token = await self.get_access_token()
-        if not access_token:
-            logger.error("[JST] 无法获取 access_token，跳过: %s", path)
-            return {}
-
+    async def _do_post(self, path: str, access_token: str, biz_params: dict[str, Any]) -> dict[str, Any]:
         biz_json = json.dumps(biz_params, ensure_ascii=False, separators=(",", ":"))
         form: dict[str, Any] = {
             "app_key": self.app_key,
@@ -199,24 +199,62 @@ class JushuitanClient:
         form["sign"] = self._sign(form)
 
         url = f"{self.base_url}{path}"
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                url,
+                data=form,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.json(content_type=None)
+
+    async def _post(self, path: str, biz_params: dict[str, Any]) -> dict[str, Any]:
+        """签名后以 form data 方式发送请求，业务参数放在 biz 字段。
+
+        若返回 token 失效错误，会清缓存并自动重试一次。
+        """
+        if not self.is_configured:
+            logger.warning("[JST] 未配置聚水潭参数，跳过: %s", path)
+            return {}
+
+        access_token = await self.get_access_token()
+        if not access_token:
+            logger.error("[JST] 无法获取 access_token，跳过: %s", path)
+            return {}
+
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    data=form,
-                    timeout=aiohttp.ClientTimeout(total=15),
-                ) as resp:
-                    resp.raise_for_status()
-                    result = await resp.json(content_type=None)
-                    code = result.get("code")
-                    if str(code) != "0":
-                        logger.error("[JST] 业务异常 %s -> code=%s msg=%s", path, code, result.get("msg"))
-                    return result
+            result = await self._do_post(path, access_token, biz_params)
         except aiohttp.ClientResponseError as e:
             logger.error("[JST] HTTP %s: %s -> %s", e.status, path, e.message)
+            return {}
         except Exception as e:
             logger.error("[JST] 请求失败: %s -> %s", path, e)
-        return {}
+            return {}
+
+        if str(result.get("code")) == "0":
+            return result
+
+        msg = result.get("msg")
+        # token 失效：清缓存重试一次
+        if self._is_token_error(msg):
+            logger.warning("[JST] %s token 失效，清缓存并重试: %s", path, msg)
+            await self.invalidate_token_cache()
+            new_token = await self.get_access_token()
+            if new_token and new_token != access_token:
+                try:
+                    retry = await self._do_post(path, new_token, biz_params)
+                except Exception as e:
+                    logger.error("[JST] 重试请求失败: %s -> %s", path, e)
+                    return {}
+                if str(retry.get("code")) == "0":
+                    return retry
+                logger.error(
+                    "[JST] 重试仍失败 %s -> code=%s msg=%s",
+                    path, retry.get("code"), retry.get("msg"),
+                )
+                return retry
+        logger.error("[JST] 业务异常 %s -> code=%s msg=%s", path, result.get("code"), msg)
+        return result
 
     # ── 库存查询 ──────────────────────────────────────────
 

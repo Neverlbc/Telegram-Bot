@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     jushuitan_app_key: str = Field("")
     jushuitan_app_secret: str = Field("")
     jushuitan_api_url: str = Field("https://openapi.jushuitan.com")
+    jst_access_token: str = Field("", description="聚水潭 access_token 兜底值，自动获取失败时使用")
+    jst_is_test: bool = Field(False, description="聚水潭测试环境（True 走 dev-api 域名）")
 
     # Google Sheets 写入
     google_credentials_file: str = Field("google_credentials.json", description="Service Account JSON 路径")
