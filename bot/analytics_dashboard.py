@@ -18,6 +18,10 @@ Endpoints:
     GET /api/tier-distribution  member tier breakdown
     GET /api/hidden-menu        hidden-menu activation metrics
     GET /api/export?type=...    xlsx export (actions|users|events|trends|hidden_menu)
+    GET /api/annotations        list manual promo / activity annotations
+    POST /api/annotations       create new annotation
+    PUT /api/annotations/{id}   update annotation
+    DELETE /api/annotations/{id} delete annotation
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ from bot.config import settings
 from bot.logging_config import setup_logging
 from bot.models import async_session
 from bot.models.analytics import AnalyticsEvent
+from bot.models.analytics_annotation import AnalyticsAnnotation
 from bot.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -740,6 +745,7 @@ async def summary(request: web.Request) -> web.Response:
         recent_events = await _recent_events(session, qf)
         tier_data = await _tier_distribution(session, qf)
         hidden = await _hidden_menu_stats(session, qf)
+        annotations = await _annotations_in_range(session, qf.since, qf.until)
 
     return web.json_response({
         "filter": _filter_dump(qf),
@@ -752,6 +758,7 @@ async def summary(request: web.Request) -> web.Response:
         "recent_events": recent_events,
         "tier_distribution": tier_data,
         "hidden_menu": hidden,
+        "annotations": [_annotation_dump(a) for a in annotations],
     })
 
 
@@ -793,6 +800,145 @@ async def hidden_menu(request: web.Request) -> web.Response:
     async with async_session() as session:
         rows = await _hidden_menu_stats(session, qf)
     return web.json_response({"filter": _filter_dump(qf), "menus": rows})
+
+
+# ── Annotations (promo / activity markers) ─────────────────
+
+
+def _annotation_dump(record: AnalyticsAnnotation) -> dict[str, Any]:
+    return {
+        "id": record.id,
+        "event_date": record.event_date.isoformat() if record.event_date else None,
+        "title": record.title,
+        "description": record.description or "",
+        "color": record.color or "",
+        "created_at": _dt(record.created_at),
+        "updated_at": _dt(record.updated_at),
+    }
+
+
+async def _annotations_in_range(session: Any, since: datetime, until: datetime) -> list[AnalyticsAnnotation]:
+    stmt = (
+        select(AnalyticsAnnotation)
+        .where(
+            AnalyticsAnnotation.event_date >= since.date(),
+            AnalyticsAnnotation.event_date < until.date(),
+        )
+        .order_by(AnalyticsAnnotation.event_date)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars())
+
+
+async def annotations_list(request: web.Request) -> web.Response:
+    if not _authorized(request):
+        return _json_error("unauthorized", 401)
+
+    qf = _parse_filter(request)
+    async with async_session() as session:
+        records = await _annotations_in_range(session, qf.since, qf.until)
+    return web.json_response({
+        "filter": _filter_dump(qf),
+        "annotations": [_annotation_dump(r) for r in records],
+    })
+
+
+def _validate_annotation_payload(payload: dict[str, Any]) -> tuple[date | None, str, str, str, str | None]:
+    """Returns (event_date, title, description, color, error_msg)."""
+    raw_date = (payload.get("event_date") or "").strip()
+    title = (payload.get("title") or "").strip()
+    description = (payload.get("description") or "").strip()
+    color = (payload.get("color") or "").strip()
+
+    if not raw_date:
+        return None, "", "", "", "event_date 必填 (YYYY-MM-DD)"
+    try:
+        event_date = date.fromisoformat(raw_date)
+    except ValueError:
+        return None, "", "", "", "event_date 格式应为 YYYY-MM-DD"
+    if not title:
+        return None, "", "", "", "title 必填"
+    if len(title) > 100:
+        return None, "", "", "", "title 不能超过 100 字符"
+    if color and len(color) > 20:
+        return None, "", "", "", "color 不能超过 20 字符"
+
+    return event_date, title, description, color, None
+
+
+async def annotations_create(request: web.Request) -> web.Response:
+    if not _authorized(request):
+        return _json_error("unauthorized", 401)
+    try:
+        payload = await request.json()
+    except Exception:
+        return _json_error("invalid JSON body", 400)
+    if not isinstance(payload, dict):
+        return _json_error("payload must be a JSON object", 400)
+
+    event_date, title, description, color, error_msg = _validate_annotation_payload(payload)
+    if error_msg:
+        return _json_error(error_msg, 400)
+
+    async with async_session() as session:
+        record = AnalyticsAnnotation(
+            event_date=event_date,
+            title=title,
+            description=description or None,
+            color=color or None,
+        )
+        session.add(record)
+        await session.commit()
+        await session.refresh(record)
+    return web.json_response(_annotation_dump(record), status=201)
+
+
+async def annotations_update(request: web.Request) -> web.Response:
+    if not _authorized(request):
+        return _json_error("unauthorized", 401)
+    try:
+        record_id = int(request.match_info.get("id", "0"))
+    except ValueError:
+        return _json_error("invalid id", 400)
+    try:
+        payload = await request.json()
+    except Exception:
+        return _json_error("invalid JSON body", 400)
+    if not isinstance(payload, dict):
+        return _json_error("payload must be a JSON object", 400)
+
+    event_date, title, description, color, error_msg = _validate_annotation_payload(payload)
+    if error_msg:
+        return _json_error(error_msg, 400)
+
+    async with async_session() as session:
+        record = await session.get(AnalyticsAnnotation, record_id)
+        if not record:
+            return _json_error("annotation not found", 404)
+        record.event_date = event_date
+        record.title = title
+        record.description = description or None
+        record.color = color or None
+        await session.commit()
+        await session.refresh(record)
+    return web.json_response(_annotation_dump(record))
+
+
+async def annotations_delete(request: web.Request) -> web.Response:
+    if not _authorized(request):
+        return _json_error("unauthorized", 401)
+    try:
+        record_id = int(request.match_info.get("id", "0"))
+    except ValueError:
+        return _json_error("invalid id", 400)
+
+    async with async_session() as session:
+        record = await session.get(AnalyticsAnnotation, record_id)
+        if not record:
+            return _json_error("annotation not found", 404)
+        await session.delete(record)
+        await session.commit()
+    return web.json_response({"deleted": record_id})
 
 
 # ── Excel export ───────────────────────────────────────────
@@ -1149,6 +1295,36 @@ DASHBOARD_HTML = r"""<!doctype html>
         </table>
       </div>
     </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>活动 / 大促节点标注
+          <span class="chart-tools">
+            <button id="addAnnotationBtn">+ 新建标注</button>
+          </span>
+        </h2>
+        <p style="color:var(--muted);margin:0 0 10px;font-size:13px">
+          标注会以虚线形式叠加到上方"每日趋势"图，方便对照流量变化。
+        </p>
+        <form id="annotationForm" style="display:none;margin-bottom:10px;padding:10px;border:1px dashed var(--line);border-radius:6px;">
+          <input type="hidden" id="annotationId" />
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input id="annotationDate" type="date" required style="min-width:140px" />
+            <input id="annotationTitle" type="text" required placeholder="标题（如：双 11 促销）" maxlength="100" style="min-width:200px;flex:1" />
+            <input id="annotationColor" type="color" value="#a35c12" title="颜色" style="min-width:40px;width:56px;padding:0" />
+          </div>
+          <textarea id="annotationDesc" placeholder="备注（可选）" rows="2" style="margin-top:8px;width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:13px;"></textarea>
+          <div style="margin-top:8px;display:flex;gap:6px;">
+            <button type="submit" id="annotationSubmit">保存</button>
+            <button type="button" id="annotationCancel" class="ghost">取消</button>
+          </div>
+        </form>
+        <table>
+          <thead><tr><th>日期</th><th>标题</th><th>备注</th><th>颜色</th><th style="width:120px">操作</th></tr></thead>
+          <tbody id="annotationsTable"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
   <script>
@@ -1188,25 +1364,56 @@ DASHBOARD_HTML = r"""<!doctype html>
       return `<span class="${cls}">${arrow} ${fmt.format(Math.abs(delta))} (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%)</span>`;
     }
 
-    function trendsOption(daily, type) {
+    function trendsOption(daily, type, annotations) {
       const days = daily.map(r => r.day.slice(5));
+      const dayKeys = daily.map(r => r.day);
       const series = [
         { name: '新增用户', data: daily.map(r => r.new_users), color: '#1264a3' },
         { name: '活跃用户', data: daily.map(r => r.active_users), color: '#11845b' },
         { name: '按钮点击', data: daily.map(r => r.callbacks), color: '#a35c12' },
         { name: '价格查询', data: daily.map(r => r.price_queries), color: '#b42318' },
       ];
-      return {
-        tooltip: { trigger: 'axis' },
-        legend: { bottom: 0, textStyle: { fontSize: 12 } },
-        grid: { left: 40, right: 20, top: 10, bottom: 40 },
-        xAxis: { type: 'category', data: days, axisLabel: { fontSize: 11 } },
-        yAxis: { type: 'value', axisLabel: { fontSize: 11 } },
-        series: series.map(s => ({
+
+      // 把活动节点转换成 markLine 数据，xAxis 是 category 类型，所以用 xAxis index
+      const annotationLines = (annotations || []).filter(a => dayKeys.includes(a.event_date)).map(a => ({
+        xAxis: a.event_date.slice(5),
+        label: {
+          formatter: a.title,
+          fontSize: 11,
+          color: a.color || '#a35c12',
+          fontWeight: 600,
+          backgroundColor: 'rgba(255,255,255,0.85)',
+          padding: [2, 4],
+          borderRadius: 3,
+          position: 'insideEndTop',
+        },
+        lineStyle: {
+          color: a.color || '#a35c12',
+          type: 'dashed',
+          width: 1.5,
+        },
+      }));
+
+      const seriesItems = series.map((s, idx) => {
+        const item = {
           name: s.name, type: type, data: s.data,
           smooth: type === 'line', itemStyle: { color: s.color },
           lineStyle: type === 'line' ? { width: 2 } : undefined,
-        })),
+        };
+        // 只把 markLine 挂在第一条线上，避免多条线重复绘制
+        if (idx === 0 && annotationLines.length) {
+          item.markLine = { silent: true, symbol: 'none', data: annotationLines };
+        }
+        return item;
+      });
+
+      return {
+        tooltip: { trigger: 'axis' },
+        legend: { bottom: 0, textStyle: { fontSize: 12 } },
+        grid: { left: 40, right: 20, top: 30, bottom: 40 },
+        xAxis: { type: 'category', data: days, axisLabel: { fontSize: 11 } },
+        yAxis: { type: 'value', axisLabel: { fontSize: 11 } },
+        series: seriesItems,
       };
     }
 
@@ -1303,7 +1510,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       setText('messages', data.summary.messages);
       setText('recentUsers', data.summary.recent_active_users);
 
-      applyChart('trendsChart', () => trendsOption(data.daily, chartTypes.trends));
+      applyChart('trendsChart', () => trendsOption(data.daily, chartTypes.trends, data.annotations));
       applyChart('languagesChart', () => pieOrBarOption(data.languages, chartTypes.languages));
       applyChart('heatChart', () => heatOption(data.modules, chartTypes.heat));
       applyChart('tiersChart', () => tiersOption(data.tier_distribution.tiers, chartTypes.tiers));
@@ -1328,7 +1535,107 @@ DASHBOARD_HTML = r"""<!doctype html>
         <td>${escapeHtml(e.event_name)}</td>
         <td>${escapeHtml(e.outcome || '-')}</td>
       </tr>`).join('') || '<tr><td colspan="4" class="empty">暂无数据</td></tr>';
+
+      renderAnnotations(data.annotations || []);
     }
+
+    // ── Annotations management ──────────────────────────────
+    function renderAnnotations(items) {
+      if (!items.length) {
+        $('annotationsTable').innerHTML = '<tr><td colspan="5" class="empty">暂无标注，点右上"新建标注"添加</td></tr>';
+        return;
+      }
+      $('annotationsTable').innerHTML = items.map(a => `<tr data-id="${a.id}">
+        <td>${escapeHtml(a.event_date)}</td>
+        <td><strong>${escapeHtml(a.title)}</strong></td>
+        <td style="color:var(--muted)">${escapeHtml(a.description || '-')}</td>
+        <td><span style="display:inline-block;width:18px;height:14px;border-radius:3px;background:${escapeHtml(a.color || '#a35c12')};border:1px solid var(--line)"></span> <span style="color:var(--muted);font-size:12px">${escapeHtml(a.color || '默认')}</span></td>
+        <td>
+          <button class="ghost annot-edit" data-id="${a.id}" style="height:26px;padding:0 8px;font-size:12px">编辑</button>
+          <button class="annot-del" data-id="${a.id}" style="height:26px;padding:0 8px;font-size:12px;background:#b42318;border-color:#b42318">删除</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    function showAnnotationForm(record) {
+      $('annotationForm').style.display = '';
+      $('annotationId').value = record ? record.id : '';
+      $('annotationDate').value = record ? record.event_date : new Date().toISOString().slice(0, 10);
+      $('annotationTitle').value = record ? record.title : '';
+      $('annotationDesc').value = record ? (record.description || '') : '';
+      $('annotationColor').value = (record && record.color) || '#a35c12';
+      $('annotationTitle').focus();
+    }
+    function hideAnnotationForm() {
+      $('annotationForm').style.display = 'none';
+      $('annotationForm').reset();
+      $('annotationId').value = '';
+    }
+
+    async function annotationApi(method, path, body) {
+      const token = $('token').value.trim();
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['X-Analytics-Token'] = token;
+      const res = await fetch(path, {
+        method, headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (!res.ok) {
+        let msg = '请求失败：' + res.status;
+        try {
+          const data = await res.json();
+          if (data.error) msg = data.error;
+        } catch (_) {}
+        throw new Error(msg);
+      }
+      return res.status === 204 ? null : res.json();
+    }
+
+    document.addEventListener('click', async (e) => {
+      const editBtn = e.target.closest('.annot-edit');
+      if (editBtn) {
+        const id = Number(editBtn.dataset.id);
+        const record = (lastData?.annotations || []).find(a => a.id === id);
+        if (record) showAnnotationForm(record);
+        return;
+      }
+      const delBtn = e.target.closest('.annot-del');
+      if (delBtn) {
+        if (!confirm('确认删除这个标注吗？')) return;
+        const id = Number(delBtn.dataset.id);
+        try {
+          await annotationApi('DELETE', `/api/annotations/${id}`);
+          await load();
+        } catch (err) {
+          alert(err.message);
+        }
+        return;
+      }
+    });
+
+    $('addAnnotationBtn').addEventListener('click', () => showAnnotationForm(null));
+    $('annotationCancel').addEventListener('click', hideAnnotationForm);
+    $('annotationForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = $('annotationId').value;
+      const payload = {
+        event_date: $('annotationDate').value,
+        title: $('annotationTitle').value.trim(),
+        description: $('annotationDesc').value.trim(),
+        color: $('annotationColor').value,
+      };
+      try {
+        if (id) {
+          await annotationApi('PUT', `/api/annotations/${id}`, payload);
+        } else {
+          await annotationApi('POST', '/api/annotations', payload);
+        }
+        hideAnnotationForm();
+        await load();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
 
     function buildQuery(extra = {}) {
       const params = new URLSearchParams();
@@ -1437,6 +1744,10 @@ def create_app() -> web.Application:
     app.router.add_get("/api/tier-distribution", tier_distribution)
     app.router.add_get("/api/hidden-menu", hidden_menu)
     app.router.add_get("/api/export", export)
+    app.router.add_get("/api/annotations", annotations_list)
+    app.router.add_post("/api/annotations", annotations_create)
+    app.router.add_put(r"/api/annotations/{id:\d+}", annotations_update)
+    app.router.add_delete(r"/api/annotations/{id:\d+}", annotations_delete)
     return app
 
 
