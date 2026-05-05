@@ -998,25 +998,39 @@ async def annotations_delete(request: web.Request) -> web.Response:
 
 
 def _xlsx_response(headers: list[str], rows: list[list[Any]], filename: str) -> web.Response:
+    """单 sheet 导出（向后兼容）."""
+    return _xlsx_multi_sheet([("概览", headers, rows)], filename)
+
+
+def _xlsx_multi_sheet(
+    sheets: list[tuple[str, list[str], list[list[Any]]]],
+    filename: str,
+) -> web.Response:
+    """多 sheet 导出. 每个 tuple = (sheet_name, headers, rows)."""
     try:
         from openpyxl import Workbook
     except ImportError:
         return _json_error("openpyxl 未安装，请在容器内 pip install openpyxl", 500)
 
     wb = Workbook()
-    ws = wb.active
-    ws.append(headers)
-    for row in rows:
-        ws.append(row)
-    # Auto width (rough heuristic)
-    for col_idx, header in enumerate(headers, start=1):
-        max_len = len(str(header))
+    wb.remove(wb.active)
+
+    for sheet_name, headers, rows in sheets:
+        ws = wb.create_sheet(title=sheet_name[:31])  # Excel sheet 名最长 31
+        ws.append(headers)
         for row in rows:
-            if col_idx - 1 < len(row):
-                cell_val = str(row[col_idx - 1] or "")
-                if len(cell_val) > max_len:
-                    max_len = len(cell_val)
-        ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 2, 60)
+            ws.append(row)
+        for col_idx, header in enumerate(headers, start=1):
+            max_len = len(str(header))
+            for row in rows:
+                if col_idx - 1 < len(row):
+                    cell_val = str(row[col_idx - 1] or "")
+                    if len(cell_val) > max_len:
+                        max_len = len(cell_val)
+            ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 2, 60)
+
+    if not wb.sheetnames:
+        wb.create_sheet(title="empty")
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -1027,6 +1041,125 @@ def _xlsx_response(headers: list[str], rows: list[list[Any]], filename: str) -> 
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+
+# ── 用户信息查询（导出明细用） ─────────────────────────────
+
+
+async def _load_user_lookup(
+    session: Any, telegram_ids: list[int]
+) -> dict[int, dict[str, str]]:
+    """返回 {telegram_id: {username, first_name, last_name, display_name, tier_code, tier_label}}."""
+    if not telegram_ids:
+        return {}
+    unique_ids = list(set(telegram_ids))
+
+    user_stmt = select(User.telegram_id, User.username, User.first_name, User.last_name).where(
+        User.telegram_id.in_(unique_ids)
+    )
+    user_rows = list((await session.execute(user_stmt)).mappings())
+
+    tier_map = await _get_user_tiers(session, unique_ids)
+
+    result: dict[int, dict[str, str]] = {}
+    for row in user_rows:
+        tid = int(row["telegram_id"])
+        name_parts = [p for p in (row["first_name"], row["last_name"]) if p]
+        display = " ".join(name_parts) if name_parts else ""
+        username = row["username"] or ""
+        if username:
+            display = f"{display} (@{username})" if display else f"@{username}"
+        tier_code = tier_map.get(tid, "public")
+        result[tid] = {
+            "username": username,
+            "first_name": row["first_name"] or "",
+            "last_name": row["last_name"] or "",
+            "display_name": display or "-",
+            "tier_code": tier_code,
+            "tier_label": _tier_label(tier_code),
+        }
+
+    # 没在 users 表里的，也补上空记录，避免 KeyError
+    for tid in unique_ids:
+        if tid not in result:
+            tier_code = tier_map.get(tid, "public")
+            result[tid] = {
+                "username": "",
+                "first_name": "",
+                "last_name": "",
+                "display_name": "-",
+                "tier_code": tier_code,
+                "tier_label": _tier_label(tier_code),
+            }
+    return result
+
+
+async def _detail_event_rows(
+    session: Any, qf: QueryFilter, extra_filters: list[Any] | None = None, limit: int = 5000
+) -> list[dict[str, Any]]:
+    """查询原始事件（带用户信息），用于导出明细 sheet."""
+    stmt = (
+        qf.apply(
+            select(
+                AnalyticsEvent.created_at,
+                AnalyticsEvent.telegram_id,
+                AnalyticsEvent.module,
+                AnalyticsEvent.action,
+                AnalyticsEvent.event_name,
+                AnalyticsEvent.event_type,
+                AnalyticsEvent.event_data,
+                AnalyticsEvent.language,
+            )
+        )
+        .order_by(AnalyticsEvent.created_at.desc())
+        .limit(limit)
+    )
+    if extra_filters:
+        for f in extra_filters:
+            stmt = stmt.where(f)
+    result = await session.execute(stmt)
+    raw_rows = list(result.mappings())
+
+    telegram_ids = [int(r["telegram_id"]) for r in raw_rows if r["telegram_id"]]
+    users = await _load_user_lookup(session, telegram_ids)
+
+    detail: list[dict[str, Any]] = []
+    for row in raw_rows:
+        tid = row["telegram_id"]
+        info = users.get(int(tid), {}) if tid else {}
+        detail.append({
+            "created_at": _dt(row["created_at"]),
+            "telegram_id": tid,
+            "username": info.get("username", ""),
+            "display_name": info.get("display_name", "-"),
+            "tier_label": info.get("tier_label", "普通"),
+            "language": _language_label(row["language"]),
+            "module": _module_label(row["module"]),
+            "module_code": str(row["module"] or ""),
+            "action_label": _action_label(row["module"], row["action"], row["event_name"], row["event_data"]),
+            "action_code": str(row["action"] or ""),
+            "event_name": row["event_name"],
+            "event_type": row["event_type"],
+            "outcome": _event_outcome(row["event_data"]) or "",
+        })
+    return detail
+
+
+_DETAIL_HEADERS = ["时间", "TGID", "用户名", "显示名称", "等级", "语言", "模块", "动作", "结果"]
+
+
+def _detail_row(item: dict[str, Any]) -> list[Any]:
+    return [
+        item["created_at"] or "",
+        item["telegram_id"],
+        item["username"],
+        item["display_name"],
+        item["tier_label"],
+        item["language"],
+        item["module"],
+        item["action_label"],
+        item["outcome"],
+    ]
 
 
 async def export(request: web.Request) -> web.Response:
@@ -1040,84 +1173,155 @@ async def export(request: web.Request) -> web.Response:
 
     async with async_session() as session:
         if export_type == "actions":
-            rows = await _top_actions(session, qf, limit=200)
-            return _xlsx_response(
-                ["排名", "动作", "代码", "次数", "去重用户数", "占比%"],
-                [[i + 1, r["name"], r["code"], r["count"], r["users"], r["percent"]] for i, r in enumerate(rows)],
-                f"功能动作排行_{suffix}_{today}.xlsx",
-            )
+            summary = await _top_actions(session, qf, limit=500)
+            detail = await _detail_event_rows(session, qf, limit=10000)
+            return _xlsx_multi_sheet([
+                (
+                    "概览",
+                    ["排名", "动作", "代码", "次数", "去重用户数", "占比%"],
+                    [[i + 1, r["name"], r["code"], r["count"], r["users"], r["percent"]] for i, r in enumerate(summary)],
+                ),
+                (
+                    "明细",
+                    _DETAIL_HEADERS,
+                    [_detail_row(r) for r in detail],
+                ),
+            ], f"功能动作排行_{suffix}_{today}.xlsx")
+
         if export_type == "users":
-            rows = await _top_users(session, qf, limit=500)
-            return _xlsx_response(
-                ["排名", "TGID", "用户名", "等级", "语言", "事件数", "最后访问"],
-                [
-                    [i + 1, r["telegram_id"], r["display_name"], r["tier_label"], _language_label(r["language"]), r["count"], r["last_seen"] or ""]
-                    for i, r in enumerate(rows)
-                ],
-                f"用户排行_{suffix}_{today}.xlsx",
-            )
+            summary = await _top_users(session, qf, limit=500)
+            telegram_ids = [int(r["telegram_id"]) for r in summary if r["telegram_id"]]
+            user_event_filter = AnalyticsEvent.telegram_id.in_(telegram_ids) if telegram_ids else AnalyticsEvent.id == -1
+            detail = await _detail_event_rows(session, qf, extra_filters=[user_event_filter], limit=10000)
+            return _xlsx_multi_sheet([
+                (
+                    "概览",
+                    ["排名", "TGID", "用户名", "等级", "语言", "事件数", "最后访问"],
+                    [
+                        [i + 1, r["telegram_id"], r["display_name"], r["tier_label"], _language_label(r["language"]), r["count"], r["last_seen"] or ""]
+                        for i, r in enumerate(summary)
+                    ],
+                ),
+                (
+                    "明细",
+                    _DETAIL_HEADERS,
+                    [_detail_row(r) for r in detail],
+                ),
+            ], f"用户排行_{suffix}_{today}.xlsx")
+
         if export_type == "events":
-            rows = await _recent_events(session, qf, limit=2000)
-            return _xlsx_response(
-                ["时间", "TGID", "用户名", "显示名称", "语言", "事件", "代码", "结果"],
-                [
-                    [
-                        r["created_at"] or "", r["telegram_id"],
-                        r["username"] or "", r["display_name"] or "",
-                        _language_label(r["language"]), r["event_name"], r["event_code"], r["outcome"] or "",
-                    ]
-                    for r in rows
-                ],
-                f"事件明细_{suffix}_{today}.xlsx",
-            )
+            detail = await _detail_event_rows(session, qf, limit=10000)
+            return _xlsx_multi_sheet([
+                (
+                    "明细",
+                    _DETAIL_HEADERS + ["事件代码"],
+                    [_detail_row(r) + [r["event_name"]] for r in detail],
+                ),
+            ], f"事件明细_{suffix}_{today}.xlsx")
+
         if export_type == "languages":
-            rows = await _count_by(session, qf, AnalyticsEvent.language, 50, _language_label)
-            return _xlsx_response(
-                ["语言", "代码", "事件数", "占比%"],
-                [[r["name"], r["code"], r["count"], r["percent"]] for r in rows],
-                f"语言分布_{suffix}_{today}.xlsx",
-            )
+            summary = await _count_by(session, qf, AnalyticsEvent.language, 50, _language_label)
+            detail = await _detail_event_rows(session, qf, limit=10000)
+            return _xlsx_multi_sheet([
+                (
+                    "概览",
+                    ["语言", "代码", "事件数", "占比%"],
+                    [[r["name"], r["code"], r["count"], r["percent"]] for r in summary],
+                ),
+                (
+                    "明细",
+                    _DETAIL_HEADERS,
+                    [_detail_row(r) for r in detail],
+                ),
+            ], f"语言分布_{suffix}_{today}.xlsx")
+
         if export_type == "modules":
-            rows = await _module_heat(session, qf)
-            return _xlsx_response(
-                ["模块", "代码", "本期事件", "本期用户", "上期事件", "上期用户", "变化", "变化%", "本期占比%"],
-                [
+            summary = await _module_heat(session, qf)
+            detail = await _detail_event_rows(session, qf, limit=10000)
+            return _xlsx_multi_sheet([
+                (
+                    "概览",
+                    ["模块", "代码", "本期事件", "本期用户", "上期事件", "上期用户", "变化", "变化%", "本期占比%"],
                     [
-                        r["name"], r["code"], r["count"], r["users"],
-                        r["previous_count"], r["previous_users"],
-                        r["delta"], r["delta_percent"], r["percent"],
-                    ]
-                    for r in rows
-                ],
-                f"模块热度_{suffix}_{today}.xlsx",
-            )
+                        [
+                            r["name"], r["code"], r["count"], r["users"],
+                            r["previous_count"], r["previous_users"],
+                            r["delta"], r["delta_percent"], r["percent"],
+                        ]
+                        for r in summary
+                    ],
+                ),
+                (
+                    "明细",
+                    _DETAIL_HEADERS,
+                    [_detail_row(r) for r in detail],
+                ),
+            ], f"模块热度_{suffix}_{today}.xlsx")
+
         if export_type == "tiers":
             data = await _tier_distribution(session, qf)
-            return _xlsx_response(
-                ["等级", "代码", "用户数", "事件数", "均事件/人", "用户占比%"],
-                [
-                    [t["name"], t["code"], t["users"], t["events"], t["avg_events_per_user"], t["user_percent"]]
-                    for t in data["tiers"]
-                ],
-                f"会员等级分布_{suffix}_{today}.xlsx",
-            )
+            # 明细：列出每个有事件的用户 + 等级 + 事件数 + 最后访问
+            user_summary = await _top_users(session, qf, limit=2000)
+            return _xlsx_multi_sheet([
+                (
+                    "等级汇总",
+                    ["等级", "代码", "用户数", "事件数", "均事件/人", "用户占比%"],
+                    [
+                        [t["name"], t["code"], t["users"], t["events"], t["avg_events_per_user"], t["user_percent"]]
+                        for t in data["tiers"]
+                    ],
+                ),
+                (
+                    "用户明细",
+                    ["TGID", "用户名", "显示名称", "等级", "语言", "事件数", "最后访问"],
+                    [
+                        [r["telegram_id"], "", r["display_name"], r["tier_label"], _language_label(r["language"]), r["count"], r["last_seen"] or ""]
+                        for r in user_summary
+                    ],
+                ),
+            ], f"会员等级分布_{suffix}_{today}.xlsx")
+
         if export_type == "trends":
-            rows = await _daily_trends(session, qf)
-            return _xlsx_response(
-                ["日期", "事件总数", "活跃用户", "新增用户", "按钮点击", "价格查询"],
-                [
-                    [r["day"], r["events"], r["active_users"], r["new_users"], r["callbacks"], r["price_queries"]]
-                    for r in rows
-                ],
-                f"每日趋势_{suffix}_{today}.xlsx",
-            )
+            summary = await _daily_trends(session, qf)
+            detail = await _detail_event_rows(session, qf, limit=10000)
+            return _xlsx_multi_sheet([
+                (
+                    "每日汇总",
+                    ["日期", "事件总数", "活跃用户", "新增用户", "按钮点击", "价格查询"],
+                    [
+                        [r["day"], r["events"], r["active_users"], r["new_users"], r["callbacks"], r["price_queries"]]
+                        for r in summary
+                    ],
+                ),
+                (
+                    "明细",
+                    _DETAIL_HEADERS,
+                    [_detail_row(r) for r in detail],
+                ),
+            ], f"每日趋势_{suffix}_{today}.xlsx")
+
         if export_type == "hidden_menu":
-            rows = await _hidden_menu_stats(session, qf)
-            return _xlsx_response(
-                ["隐藏菜单", "代码", "激活次数", "去重用户", "最后激活"],
-                [[r["name"], r["code"], r["activations"], r["users"], r["last_at"] or ""] for r in rows],
-                f"隐藏菜单数据_{suffix}_{today}.xlsx",
+            summary = await _hidden_menu_stats(session, qf)
+            detail = await _detail_event_rows(
+                session, qf,
+                extra_filters=[
+                    AnalyticsEvent.module == "hidden_access",
+                    AnalyticsEvent.event_name == "hidden_access.password_success",
+                ],
+                limit=10000,
             )
+            return _xlsx_multi_sheet([
+                (
+                    "概览",
+                    ["隐藏菜单", "代码", "激活次数", "去重用户", "最后激活"],
+                    [[r["name"], r["code"], r["activations"], r["users"], r["last_at"] or ""] for r in summary],
+                ),
+                (
+                    "明细",
+                    _DETAIL_HEADERS,
+                    [_detail_row(r) for r in detail],
+                ),
+            ], f"隐藏菜单数据_{suffix}_{today}.xlsx")
 
     return _json_error(f"unknown export type: {export_type}", 400)
 
