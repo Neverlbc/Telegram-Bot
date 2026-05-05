@@ -542,6 +542,7 @@ def _price_item_lines(item: OutdoorPriceItem, lang: str, tier: str, rate: str, i
     labels = _price_field_labels(lang)
     lines = [
         f"{labels['sku']}：<b>{escape(item.sku)}</b>",
+        f"{labels['description']}：{escape(item.description or labels['none'])}",
         f"{labels['image']}：{image_text}",
     ]
 
@@ -562,6 +563,8 @@ def _price_item_message_text(item: OutdoorPriceItem, lang: str, tier: str, rate:
 def _price_table_value(item: OutdoorPriceItem, key: str, none_text: str) -> str:
     if key == "sku":
         return item.sku or none_text
+    if key == "description":
+        return item.description or none_text
     if key == "stock":
         return item.moscow_stock or none_text
     if key == "status":
@@ -570,7 +573,7 @@ def _price_table_value(item: OutdoorPriceItem, key: str, none_text: str) -> str:
 
 
 def _price_table_keys(tier: str) -> list[str]:
-    keys = ["sku"]
+    keys = ["sku", "description"]
     if tier == "vvip":
         keys.append("usd")
     keys.append("rub")
@@ -587,6 +590,7 @@ def _price_template_labels(lang: str, tier: str) -> dict[str, str]:
             "en": "SKU model" if tier == "vvip" else "SKU",
             "ru": "Модель SKU" if tier == "vvip" else "SKU",
         },
+        "description": {"zh": "描述", "en": "Description", "ru": "Описание"},
         "usd": {"zh": "美元", "en": "USD price", "ru": "Цена в USD"},
         "rub": {"zh": "卢布", "en": "RUB price", "ru": "Цена в рублях"},
         "cny_ru": {
