@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import time as _time
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -195,7 +196,48 @@ def _parse_date(value: str | None, default: date) -> date:
         return default
 
 
-def _parse_filter(request: web.Request) -> QueryFilter:
+# ── Test-account exclusion (admins + configured usernames) ─
+
+_TEST_IDS_CACHE: list[int] | None = None
+_TEST_IDS_CACHE_AT: float = 0.0
+_TEST_IDS_CACHE_TTL = 300  # 5 分钟
+
+
+async def _resolve_test_user_ids() -> list[int]:
+    """Combine ADMIN_IDS with telegram_id of users whose username is in the test list.
+
+    Cached for 5 minutes to avoid hitting DB on every dashboard request.
+    """
+    global _TEST_IDS_CACHE, _TEST_IDS_CACHE_AT
+    now = _time.time()
+    if _TEST_IDS_CACHE is not None and now - _TEST_IDS_CACHE_AT < _TEST_IDS_CACHE_TTL:
+        return _TEST_IDS_CACHE
+
+    ids: set[int] = set(int(x) for x in settings.admin_id_list)
+    usernames = settings.analytics_test_username_list
+    if usernames:
+        try:
+            async with async_session() as session:
+                stmt = select(User.telegram_id).where(func.lower(User.username).in_(usernames))
+                result = await session.execute(stmt)
+                for (tid,) in result:
+                    if tid:
+                        ids.add(int(tid))
+        except Exception as exc:
+            logger.warning("resolve test usernames failed: %s", exc)
+
+    combined = sorted(ids)
+    _TEST_IDS_CACHE = combined
+    _TEST_IDS_CACHE_AT = now
+    return combined
+
+
+def _invalidate_test_ids_cache() -> None:
+    global _TEST_IDS_CACHE_AT
+    _TEST_IDS_CACHE_AT = 0.0
+
+
+async def _parse_filter(request: web.Request) -> QueryFilter:
     today = date.today()
     period = (request.query.get("period") or "").strip().lower()
     has_custom_dates = request.query.get("start_date") or request.query.get("end_date")
@@ -232,7 +274,7 @@ def _parse_filter(request: web.Request) -> QueryFilter:
         period_label = f"days{days}"
 
     include_test = (request.query.get("include_test", "") or "").strip().lower() in ("1", "true", "yes")
-    exclude_ids = [] if include_test else list(settings.admin_id_list)
+    exclude_ids = [] if include_test else await _resolve_test_user_ids()
 
     return QueryFilter(
         since=since,
@@ -734,7 +776,7 @@ async def summary(request: web.Request) -> web.Response:
     if not _authorized(request):
         return _json_error("unauthorized", 401)
 
-    qf = _parse_filter(request)
+    qf = await _parse_filter(request)
     async with async_session() as session:
         counts = await _summary_counts(session, qf)
         modules = await _module_heat_window(session, qf)
@@ -766,7 +808,7 @@ async def heat(request: web.Request) -> web.Response:
     if not _authorized(request):
         return _json_error("unauthorized", 401)
 
-    qf = _parse_filter(request)
+    qf = await _parse_filter(request)
     async with async_session() as session:
         rows = await _module_heat(session, qf)
     return web.json_response({"filter": _filter_dump(qf), "modules": rows})
@@ -776,7 +818,7 @@ async def trends(request: web.Request) -> web.Response:
     if not _authorized(request):
         return _json_error("unauthorized", 401)
 
-    qf = _parse_filter(request)
+    qf = await _parse_filter(request)
     async with async_session() as session:
         rows = await _daily_trends(session, qf)
     return web.json_response({"filter": _filter_dump(qf), "daily": rows})
@@ -786,7 +828,7 @@ async def tier_distribution(request: web.Request) -> web.Response:
     if not _authorized(request):
         return _json_error("unauthorized", 401)
 
-    qf = _parse_filter(request)
+    qf = await _parse_filter(request)
     async with async_session() as session:
         data = await _tier_distribution(session, qf)
     return web.json_response({"filter": _filter_dump(qf), **data})
@@ -796,7 +838,7 @@ async def hidden_menu(request: web.Request) -> web.Response:
     if not _authorized(request):
         return _json_error("unauthorized", 401)
 
-    qf = _parse_filter(request)
+    qf = await _parse_filter(request)
     async with async_session() as session:
         rows = await _hidden_menu_stats(session, qf)
     return web.json_response({"filter": _filter_dump(qf), "menus": rows})
@@ -834,7 +876,7 @@ async def annotations_list(request: web.Request) -> web.Response:
     if not _authorized(request):
         return _json_error("unauthorized", 401)
 
-    qf = _parse_filter(request)
+    qf = await _parse_filter(request)
     async with async_session() as session:
         records = await _annotations_in_range(session, qf.since, qf.until)
     return web.json_response({
@@ -981,7 +1023,7 @@ async def export(request: web.Request) -> web.Response:
         return _json_error("unauthorized", 401)
 
     export_type = (request.query.get("type") or "").strip().lower()
-    qf = _parse_filter(request)
+    qf = await _parse_filter(request)
     suffix = qf.period_label
     today = date.today().isoformat()
 

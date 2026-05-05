@@ -145,6 +145,18 @@ class Settings(BaseSettings):
     analytics_dashboard_host: str = Field("0.0.0.0", description="Analytics dashboard bind host")
     analytics_dashboard_port: int = Field(8088, description="Analytics dashboard HTTP port")
     analytics_dashboard_token: str = Field("", description="Optional dashboard access token")
+    analytics_test_usernames: str = Field(
+        "Sarahhappyeveryyear,Sarahhappyeveryday,ABFOfficialGroup,Sakurabotterrun,ABFOfficialStoreCN",
+        description="测试账号 Telegram username 列表（不带 @），逗号分隔，默认从分析中排除",
+    )
+
+    @property
+    def analytics_test_username_list(self) -> list[str]:
+        return [
+            u.strip().lstrip("@").lower()
+            for u in self.analytics_test_usernames.split(",")
+            if u.strip()
+        ]
 
     @property
     def admin_id_list(self) -> list[int]:
