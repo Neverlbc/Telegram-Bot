@@ -1259,6 +1259,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <span class="chart-tools" data-chart="trends">
             <button data-type="line" class="active">折线</button>
             <button data-type="bar">柱状</button>
+            <button data-type="pie">饼图</button>
           </span>
         </h2>
         <div id="trendsChart" class="chart tall"></div>
@@ -1268,6 +1269,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <span class="chart-tools" data-chart="languages">
             <button data-type="pie" class="active">饼图</button>
             <button data-type="bar">柱状</button>
+            <button data-type="line">折线</button>
           </span>
         </h2>
         <div id="languagesChart" class="chart tall"></div>
@@ -1280,6 +1282,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <span class="chart-tools" data-chart="heat">
             <button data-type="bar" class="active">柱状</button>
             <button data-type="pie">饼图</button>
+            <button data-type="line">折线</button>
           </span>
         </h2>
         <div id="heatChart" class="chart"></div>
@@ -1289,6 +1292,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <span class="chart-tools" data-chart="tiers">
             <button data-type="pie" class="active">饼图</button>
             <button data-type="bar">柱状</button>
+            <button data-type="line">折线</button>
           </span>
         </h2>
         <div id="tiersChart" class="chart"></div>
@@ -1298,16 +1302,22 @@ DASHBOARD_HTML = r"""<!doctype html>
     <section class="grid two">
       <div class="panel">
         <h2>功能动作排行
-          <span class="chart-tools">
-            <button class="active export-link" data-export="actions">导出 Excel</button>
+          <span class="chart-tools" data-chart="actions">
+            <button data-type="bar" class="active">柱状</button>
+            <button data-type="pie">饼图</button>
+            <button data-type="line">折线</button>
+            <button class="ghost export-link" data-export="actions">导出</button>
           </span>
         </h2>
         <div id="actionsChart" class="chart tall"></div>
       </div>
       <div class="panel">
         <h2>隐藏菜单激活
-          <span class="chart-tools">
-            <button class="active export-link" data-export="hidden_menu">导出 Excel</button>
+          <span class="chart-tools" data-chart="hidden">
+            <button data-type="bar" class="active">柱状</button>
+            <button data-type="pie">饼图</button>
+            <button data-type="line">折线</button>
+            <button class="ghost export-link" data-export="hidden_menu">导出</button>
           </span>
         </h2>
         <div id="hiddenChart" class="chart tall"></div>
@@ -1417,24 +1427,33 @@ DASHBOARD_HTML = r"""<!doctype html>
         { name: '价格查询', data: daily.map(r => r.price_queries), color: '#b42318' },
       ];
 
-      // 把活动节点转换成 markLine 数据，xAxis 是 category 类型，所以用 xAxis index
+      // 饼图：把每条系列的总和聚合展示
+      if (type === 'pie') {
+        const data = series.map(s => ({
+          name: s.name,
+          value: s.data.reduce((a, b) => a + (b || 0), 0),
+          itemStyle: { color: s.color },
+        }));
+        return {
+          tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+          legend: { bottom: 0, textStyle: { fontSize: 12 } },
+          series: [{
+            type: 'pie', radius: ['40%', '70%'], avoidLabelOverlap: true,
+            label: { formatter: '{b}\n{d}%', fontSize: 11 },
+            data,
+          }],
+        };
+      }
+
+      // 把活动节点转换成 markLine 数据
       const annotationLines = (annotations || []).filter(a => dayKeys.includes(a.event_date)).map(a => ({
         xAxis: a.event_date.slice(5),
         label: {
-          formatter: a.title,
-          fontSize: 11,
-          color: a.color || '#a35c12',
-          fontWeight: 600,
-          backgroundColor: 'rgba(255,255,255,0.85)',
-          padding: [2, 4],
-          borderRadius: 3,
-          position: 'insideEndTop',
+          formatter: a.title, fontSize: 11, color: a.color || '#a35c12',
+          fontWeight: 600, backgroundColor: 'rgba(255,255,255,0.85)',
+          padding: [2, 4], borderRadius: 3, position: 'insideEndTop',
         },
-        lineStyle: {
-          color: a.color || '#a35c12',
-          type: 'dashed',
-          width: 1.5,
-        },
+        lineStyle: { color: a.color || '#a35c12', type: 'dashed', width: 1.5 },
       }));
 
       const seriesItems = series.map((s, idx) => {
@@ -1443,7 +1462,6 @@ DASHBOARD_HTML = r"""<!doctype html>
           smooth: type === 'line', itemStyle: { color: s.color },
           lineStyle: type === 'line' ? { width: 2 } : undefined,
         };
-        // 只把 markLine 挂在第一条线上，避免多条线重复绘制
         if (idx === 0 && annotationLines.length) {
           item.markLine = { silent: true, symbol: 'none', data: annotationLines };
         }
@@ -1475,6 +1493,24 @@ DASHBOARD_HTML = r"""<!doctype html>
           }],
         };
       }
+      if (type === 'line') {
+        return {
+          tooltip: { trigger: 'axis' },
+          grid: { left: 50, right: 30, top: 20, bottom: 60 },
+          xAxis: {
+            type: 'category', data: rows.map(r => r.name),
+            axisLabel: { fontSize: 11, rotate: rows.length > 6 ? -30 : 0, interval: 0 },
+          },
+          yAxis: { type: 'value', axisLabel: { fontSize: 11 } },
+          series: [{
+            type: 'line', smooth: true, data: rows.map(r => r[valueKey]),
+            itemStyle: { color: '#1264a3' },
+            lineStyle: { width: 2 },
+            label: { show: true, position: 'top', fontSize: 11 },
+          }],
+        };
+      }
+      // bar (默认)
       return {
         tooltip: { trigger: 'axis' },
         grid: { left: 110, right: 30, top: 10, bottom: 20 },
@@ -1492,6 +1528,27 @@ DASHBOARD_HTML = r"""<!doctype html>
     function heatOption(rows, type) {
       if (!rows || !rows.length) return pieOrBarOption(rows, type);
       if (type === 'pie') return pieOrBarOption(rows, 'pie');
+      if (type === 'line') {
+        return {
+          tooltip: { trigger: 'axis', formatter: (params) => {
+            const row = rows[params[0].dataIndex];
+            return `${row.name}<br/>本期：${fmt.format(row.count)}<br/>上期：${fmt.format(row.previous_count)}<br/>变化：${row.delta >= 0 ? '+' : ''}${row.delta_percent}%`;
+          } },
+          legend: { bottom: 0, textStyle: { fontSize: 11 } },
+          grid: { left: 50, right: 30, top: 20, bottom: 60 },
+          xAxis: {
+            type: 'category', data: rows.map(r => r.name),
+            axisLabel: { fontSize: 11, rotate: rows.length > 6 ? -30 : 0, interval: 0 },
+          },
+          yAxis: { type: 'value', axisLabel: { fontSize: 11 } },
+          series: [
+            { name: '本期', type: 'line', smooth: true, data: rows.map(r => r.count),
+              itemStyle: { color: '#1264a3' }, lineStyle: { width: 2 } },
+            { name: '上期', type: 'line', smooth: true, data: rows.map(r => r.previous_count),
+              itemStyle: { color: '#9fbcd8' }, lineStyle: { width: 2, type: 'dashed' } },
+          ],
+        };
+      }
       return {
         tooltip: { trigger: 'axis', formatter: (params) => {
           const row = rows[params[0].dataIndex];
@@ -1521,6 +1578,9 @@ DASHBOARD_HTML = r"""<!doctype html>
       const filtered = tiers.filter(t => t.users > 0);
       if (!filtered.length) return pieOrBarOption([], type);
       if (type === 'pie') return pieOrBarOption(filtered.map(t => ({ name: t.name, count: t.users })), 'pie', 'count');
+      if (type === 'line') {
+        return pieOrBarOption(filtered.map(t => ({ name: t.name, count: t.users })), 'line', 'count');
+      }
       return {
         tooltip: { trigger: 'axis', formatter: (params) => {
           const t = filtered[params[0].dataIndex];
