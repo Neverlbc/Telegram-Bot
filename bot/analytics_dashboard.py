@@ -665,16 +665,27 @@ async def _recent_events(session: Any, qf: QueryFilter, limit: int = 40) -> list
                 AnalyticsEvent.event_name,
                 AnalyticsEvent.event_data,
                 AnalyticsEvent.language,
+                User.username.label("username"),
+                User.first_name.label("first_name"),
+                User.last_name.label("last_name"),
             )
         )
+        .outerjoin(User, User.telegram_id == AnalyticsEvent.telegram_id)
         .order_by(AnalyticsEvent.created_at.desc())
         .limit(limit)
     )
     result = await session.execute(stmt)
-    return [
-        {
+    rows: list[dict[str, Any]] = []
+    for row in result.mappings():
+        name_parts = [p for p in (row["first_name"], row["last_name"]) if p]
+        display_name = " ".join(name_parts) if name_parts else ""
+        if row["username"]:
+            display_name = f"{display_name} (@{row['username']})" if display_name else f"@{row['username']}"
+        rows.append({
             "created_at": _dt(row["created_at"]),
             "telegram_id": row["telegram_id"],
+            "username": row["username"] or "",
+            "display_name": display_name or "-",
             "language": row["language"] or "unknown",
             "event_name": _action_label(
                 row["module"],
@@ -684,9 +695,8 @@ async def _recent_events(session: Any, qf: QueryFilter, limit: int = 40) -> list
             ),
             "event_code": row["event_name"],
             "outcome": _event_outcome(row["event_data"]),
-        }
-        for row in result.mappings()
-    ]
+        })
+    return rows
 
 
 async def _tier_distribution(session: Any, qf: QueryFilter) -> dict[str, Any]:
@@ -1049,12 +1059,47 @@ async def export(request: web.Request) -> web.Response:
         if export_type == "events":
             rows = await _recent_events(session, qf, limit=2000)
             return _xlsx_response(
-                ["时间", "TGID", "语言", "事件", "代码", "结果"],
+                ["时间", "TGID", "用户名", "显示名称", "语言", "事件", "代码", "结果"],
                 [
-                    [r["created_at"] or "", r["telegram_id"], _language_label(r["language"]), r["event_name"], r["event_code"], r["outcome"] or ""]
+                    [
+                        r["created_at"] or "", r["telegram_id"],
+                        r["username"] or "", r["display_name"] or "",
+                        _language_label(r["language"]), r["event_name"], r["event_code"], r["outcome"] or "",
+                    ]
                     for r in rows
                 ],
                 f"事件明细_{suffix}_{today}.xlsx",
+            )
+        if export_type == "languages":
+            rows = await _count_by(session, qf, AnalyticsEvent.language, 50, _language_label)
+            return _xlsx_response(
+                ["语言", "代码", "事件数", "占比%"],
+                [[r["name"], r["code"], r["count"], r["percent"]] for r in rows],
+                f"语言分布_{suffix}_{today}.xlsx",
+            )
+        if export_type == "modules":
+            rows = await _module_heat(session, qf)
+            return _xlsx_response(
+                ["模块", "代码", "本期事件", "本期用户", "上期事件", "上期用户", "变化", "变化%", "本期占比%"],
+                [
+                    [
+                        r["name"], r["code"], r["count"], r["users"],
+                        r["previous_count"], r["previous_users"],
+                        r["delta"], r["delta_percent"], r["percent"],
+                    ]
+                    for r in rows
+                ],
+                f"模块热度_{suffix}_{today}.xlsx",
+            )
+        if export_type == "tiers":
+            data = await _tier_distribution(session, qf)
+            return _xlsx_response(
+                ["等级", "代码", "用户数", "事件数", "均事件/人", "用户占比%"],
+                [
+                    [t["name"], t["code"], t["users"], t["events"], t["avg_events_per_user"], t["user_percent"]]
+                    for t in data["tiers"]
+                ],
+                f"会员等级分布_{suffix}_{today}.xlsx",
             )
         if export_type == "trends":
             rows = await _daily_trends(session, qf)
@@ -1260,6 +1305,7 @@ DASHBOARD_HTML = r"""<!doctype html>
             <button data-type="line" class="active">折线</button>
             <button data-type="bar">柱状</button>
             <button data-type="pie">饼图</button>
+            <button class="ghost export-link" data-export="trends">导出</button>
           </span>
         </h2>
         <div id="trendsChart" class="chart tall"></div>
@@ -1270,6 +1316,7 @@ DASHBOARD_HTML = r"""<!doctype html>
             <button data-type="pie" class="active">饼图</button>
             <button data-type="bar">柱状</button>
             <button data-type="line">折线</button>
+            <button class="ghost export-link" data-export="languages">导出</button>
           </span>
         </h2>
         <div id="languagesChart" class="chart tall"></div>
@@ -1283,6 +1330,7 @@ DASHBOARD_HTML = r"""<!doctype html>
             <button data-type="bar" class="active">柱状</button>
             <button data-type="pie">饼图</button>
             <button data-type="line">折线</button>
+            <button class="ghost export-link" data-export="modules">导出</button>
           </span>
         </h2>
         <div id="heatChart" class="chart"></div>
@@ -1293,6 +1341,7 @@ DASHBOARD_HTML = r"""<!doctype html>
             <button data-type="pie" class="active">饼图</button>
             <button data-type="bar">柱状</button>
             <button data-type="line">折线</button>
+            <button class="ghost export-link" data-export="tiers">导出</button>
           </span>
         </h2>
         <div id="tiersChart" class="chart"></div>
@@ -1343,7 +1392,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           </span>
         </h2>
         <table>
-          <thead><tr><th>时间</th><th>TGID</th><th>事件</th><th>结果</th></tr></thead>
+          <thead><tr><th>时间</th><th>TGID</th><th>用户名</th><th>事件</th><th>结果</th></tr></thead>
           <tbody id="recentEvents"></tbody>
         </table>
       </div>
@@ -1635,9 +1684,10 @@ DASHBOARD_HTML = r"""<!doctype html>
       $('recentEvents').innerHTML = (data.recent_events || []).map(e => `<tr>
         <td>${shortTime(e.created_at)}</td>
         <td>${escapeHtml(e.telegram_id)}</td>
+        <td>${escapeHtml(e.display_name || '-')}</td>
         <td>${escapeHtml(e.event_name)}</td>
         <td>${escapeHtml(e.outcome || '-')}</td>
-      </tr>`).join('') || '<tr><td colspan="4" class="empty">暂无数据</td></tr>';
+      </tr>`).join('') || '<tr><td colspan="5" class="empty">暂无数据</td></tr>';
 
       renderAnnotations(data.annotations || []);
     }
