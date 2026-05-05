@@ -32,6 +32,7 @@ from bot.services.outdoor_prices import (
     get_outdoor_price_brand_titles,
     get_outdoor_price_items,
 )
+from bot.services.translation import translate_batch
 from bot.services.inventory_tiers import (
     PRICE_TIER_CODES,
     inventory_price_currency_keys,
@@ -609,6 +610,41 @@ def _price_template_labels(lang: str, tier: str) -> dict[str, str]:
     return {key: label_by_lang.get(lang, label_by_lang["zh"]) for key, label_by_lang in labels.items()}
 
 
+async def _enrich_descriptions(items: list[OutdoorPriceItem], lang: str) -> None:
+    """对缺少用户语言描述的 SKU，调用 OpenAI 把已有描述翻译过去并写回 item.descriptions。"""
+    if lang == "ru" or not items:
+        return
+
+    pending: list[tuple[OutdoorPriceItem, str]] = []
+    for item in items:
+        descs = item.descriptions or {}
+        if descs.get(lang, "").strip():
+            continue  # 已有该语言描述
+        # 选一个非空的源文本作为翻译输入（优先俄文）
+        source = descs.get("ru") or descs.get("en") or descs.get("zh") or ""
+        source = source.strip()
+        if source:
+            pending.append((item, source))
+
+    if not pending:
+        return
+
+    sources = list({source for _, source in pending})
+    try:
+        translations = await translate_batch(sources, lang)
+    except Exception as e:
+        logger.warning("description translation failed: %s", e)
+        return
+
+    for item, source in pending:
+        translated = translations.get(source)
+        if not translated or translated == source:
+            continue
+        descs = dict(item.descriptions or {})
+        descs[lang] = translated
+        item.descriptions = descs
+
+
 def _format_price_table(items: list[OutdoorPriceItem], lang: str, tier: str) -> str:
     none_text = _price_field_labels(lang)["none"]
     keys = _price_table_keys(tier)
@@ -874,6 +910,8 @@ async def on_inventory_price_table(
         await callback.answer()
         return
 
+    # 用户语言若与 Sheet 描述语言不同，调用 OpenAI 翻译并缓存
+    await _enrich_descriptions(items, lang)
     table_chunks = _price_table_chunks(items, lang, tier)
     first_text = "\n\n".join((
         _t(lang, "price_selected_brand").format(
