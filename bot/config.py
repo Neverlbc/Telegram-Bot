@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     kyb_token: str = Field("")
     kyb_prefer_static_token: bool = Field(True)
     kyb_platform_customer_code: str = Field("", description="跨运宝平台客户编码 (stock_total_query 必填)")
+    kyb_russia_warehouse_codes: str = Field("RUS2", description="跨运宝俄罗斯仓库编码，逗号分隔（仅统计这些仓的库存）")
+    jst_russia_warehouse_code: str = Field("", description="聚水潭俄罗斯仓库编号（填入后只统计该仓 order_lock，留空则汇总所有仓）")
 
     # ── 物流 API ──────────────────────────────────────
     cdek_client_id: str = Field("")

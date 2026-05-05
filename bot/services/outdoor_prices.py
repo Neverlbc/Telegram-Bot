@@ -28,6 +28,7 @@ class OutdoorPriceItem:
 
 
 def _get_gspread_client() -> Any:
+    import functools
     import gspread
     from google.oauth2.service_account import Credentials
 
@@ -37,7 +38,10 @@ def _get_gspread_client() -> Any:
         "https://www.googleapis.com/auth/drive.readonly",
     ]
     creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
-    return gspread.authorize(creds)
+    client = gspread.authorize(creds)
+    if hasattr(client, "auth") and callable(getattr(client.auth, "request", None)):
+        client.auth.request = functools.partial(client.auth.request, timeout=60)
+    return client
 
 
 def _normalize_title(value: str) -> str:

@@ -186,10 +186,15 @@ class KuayunbaoClient:
         return await self._post(endpoint, payload)
 
 
-    async def get_stock_map(self, sku_barcodes: list[str]) -> dict[str, int]:
-        """批量查询多个 SKU 的 toc 可用库存，返回 {skuBarcode: tocUsableQty}.
+    async def get_stock_map(
+        self,
+        sku_barcodes: list[str],
+        warehouse_codes: list[str] | None = None,
+    ) -> dict[str, int]:
+        """批量查询多个 SKU 的总库存，返回 {skuBarcode: tocTotalQty}.
 
-        - 跨仓库汇总（多仓库同一 SKU 的 tocUsableQty 相加）
+        - warehouse_codes: 只统计指定仓库（如 ["RUS2"]）；None 表示全部仓库
+        - tocTotalQty = 物理总库存（未扣减订单），配合 JST order_lock 计算可用量
         - 每批次最多 50 个 SKU（KYB 限制）
         - 若未配置 kyb_platform_customer_code 则返回空字典
         """
@@ -197,6 +202,7 @@ class KuayunbaoClient:
             return {}
 
         customer_code = settings.kyb_platform_customer_code
+        allowed_warehouses = set(warehouse_codes) if warehouse_codes else None
         stock_map: dict[str, int] = {}
 
         for i in range(0, len(sku_barcodes), 50):
@@ -206,6 +212,7 @@ class KuayunbaoClient:
                 result = await self.stock_total_query(
                     platform_customer_code=customer_code,
                     sku_barcode_list=batch,
+                    warehouse_code_list=warehouse_codes,
                     page_index=page,
                     page_size=50,
                 )
@@ -214,10 +221,18 @@ class KuayunbaoClient:
                     break
                 for item in data:
                     barcode = item.get("skuBarcode", "")
-                    if barcode:
-                        stock_map[barcode] = (
-                            stock_map.get(barcode, 0) + item.get("tocUsableQty", 0)
-                        )
+                    if not barcode:
+                        continue
+                    # 若 API 侧未过滤仓库（warehouse_code_list 不起作用时），客户端再过滤一次
+                    if allowed_warehouses:
+                        wh = item.get("warehouseCode", "") or item.get("warehouse_code", "")
+                        if wh and wh not in allowed_warehouses:
+                            continue
+                    # tocUsableQty = KYB 可用数量。配合 JST order_lock 使用：
+                    # 实际库存 = tocUsableQty - JST order_lock
+                    stock_map[barcode] = (
+                        stock_map.get(barcode, 0) + item.get("tocUsableQty", 0)
+                    )
                 if len(data) < 50:
                     break
                 page += 1

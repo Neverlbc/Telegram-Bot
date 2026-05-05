@@ -47,7 +47,7 @@ services:
       - ./google_credentials.json:/app/google_credentials.json:ro
     command: >
       sh -c "while true; do
-        python -m bot.sync;
+        timeout 240 python -m bot.sync || echo '[inventory-sync] timeout or error, retrying in 300s';
         sleep 300;
       done"
     networks:

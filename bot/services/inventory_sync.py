@@ -170,9 +170,11 @@ async def sync_sheet(sheet_key: str) -> SyncResult:
     logger.info("[Sync] %s: %d 个表格 SKU，JST 查询 %d 个，KYB 查询 %d 个",
                 sheet_key, len(sheet_skus), len(jst_sku_list), len(kyb_sku_list))
 
-    # ── 2. 并发查询聚水潭 + 跨运宝 ────────────────────────
-    jst_task = asyncio.create_task(jushuitan_client.get_stock_map(jst_sku_list))
-    kyb_task = asyncio.create_task(kuayunbao_client.get_stock_map(kyb_sku_list))
+    # ── 2. 并发查询聚水潭 + 跨运宝（只统计俄罗斯仓）────────
+    kyb_wh_codes = [c.strip() for c in settings.kyb_russia_warehouse_codes.split(",") if c.strip()] or None
+    jst_wh_code = settings.jst_russia_warehouse_code.strip()
+    jst_task = asyncio.create_task(jushuitan_client.get_stock_map(jst_sku_list, warehouse_code=jst_wh_code))
+    kyb_task = asyncio.create_task(kuayunbao_client.get_stock_map(kyb_sku_list, warehouse_codes=kyb_wh_codes))
     jst_map, kyb_map = await asyncio.gather(jst_task, kyb_task, return_exceptions=True)
 
     if isinstance(jst_map, Exception):
@@ -188,7 +190,9 @@ async def sync_sheet(sheet_key: str) -> SyncResult:
                 sheet_key, jst_found, len(sheet_skus), kyb_found, len(sheet_skus))
 
     # ── 3. 计算 QTYS ─────────────────────────────────────
-    # 公式：QTYS = KYB tocUsableQty - 聚水潭 order_lock（订单占有数）
+    # 公式：QTYS = KYB 俄罗斯仓 tocUsableQty (可用数量) - JST 俄罗斯仓 order_lock (订单占有)
+    # 例：GEH50R 跨运宝可用=1, JST挂单=1 → 1-1=0
+    #     TRS-335LRF 跨运宝可用=173, JST挂单=2 → 173-2=171
     updates: dict[str, SheetRowUpdate] = {}
     for row in product_rows:
         kyb_usable = _sum_source_qty(kyb_map, row.sku, "kyb", aliases)

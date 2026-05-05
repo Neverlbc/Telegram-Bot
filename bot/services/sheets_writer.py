@@ -37,6 +37,7 @@ class SheetRowUpdate:
 def _get_gspread_client() -> Any:
     """构建 gspread 客户端（同步，运行在线程池）."""
     try:
+        import functools
         import gspread
         from google.oauth2.service_account import Credentials
     except ImportError:
@@ -54,7 +55,11 @@ def _get_gspread_client() -> Any:
         "https://www.googleapis.com/auth/drive.readonly",
     ]
     creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
-    return gspread.authorize(creds)
+    client = gspread.authorize(creds)
+    # gspread 底层用 requests，默认无超时；强制 60s 上限防止卡死
+    if hasattr(client, "auth") and callable(getattr(client.auth, "request", None)):
+        client.auth.request = functools.partial(client.auth.request, timeout=60)
+    return client
 
 
 def _resolve_sheet_target(sheet_key: str) -> tuple[str, int] | None:

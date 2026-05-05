@@ -220,12 +220,16 @@ class JushuitanClient:
 
     # ── 库存查询 ──────────────────────────────────────────
 
-    async def get_stock_map(self, sku_ids: list[str]) -> dict[str, int]:
-        """批量查询 SKU 主仓实际库存，返回 {sku_id: qty}.
+    async def get_stock_map(
+        self,
+        sku_ids: list[str],
+        warehouse_code: str = "",
+    ) -> dict[str, int]:
+        """批量查询 SKU 的订单占有数，返回 {sku_id: order_lock}.
 
+        - warehouse_code: 只统计该仓库编号的 order_lock（空字符串 = 汇总所有仓）
         - 自动分批（每批 ≤ 100 个 SKU）
         - 自动翻页直到 has_next=False
-        - qty = 主仓实际库存（聚水潭挂单库存）
         """
         if not sku_ids or not self.is_configured:
             return {}
@@ -247,9 +251,17 @@ class JushuitanClient:
                 data = result.get("data") or {}
                 for item in data.get("inventorys") or []:
                     sku = str(item.get("sku_id", "")).strip()
-                    if sku:
-                        # order_lock = 订单占有数（已被订单锁定的库存）
-                        stock_map[sku] = int(item.get("order_lock", 0))
+                    if not sku:
+                        continue
+                    # 若配置了仓库编号，只统计该仓库的 order_lock
+                    if warehouse_code:
+                        item_wh = (
+                            str(item.get("i_ware_code", "") or item.get("storekeeper_code", "")).strip()
+                        )
+                        if item_wh and item_wh != warehouse_code:
+                            continue
+                    # 跨仓库累加，不覆盖（防止多行同 SKU 时只保留最后一行）
+                    stock_map[sku] = stock_map.get(sku, 0) + int(item.get("order_lock", 0))
                 if not data.get("has_next", False):
                     break
                 page += 1
