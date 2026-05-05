@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     ai_reply_max_count: int = Field(5, description="AI 回复最大触发次数，超过后转人工")
     ai_reply_ttl_days: int = Field(7, description="AI 回复计数 TTL (天)")
 
+    # ── DeepSeek (商品描述翻译) ─────────────────────
+    deepseek_api_key: str = Field("", description="DeepSeek API Key，用于俄→英描述翻译")
+    deepseek_api_url: str = Field("https://api.deepseek.com/chat/completions", description="DeepSeek chat-completions 端点")
+    deepseek_model: str = Field("deepseek-v4-flash", description="DeepSeek 模型名称")
+
     # ── 管理员与客服 ───────────────────────────────────
     admin_ids: str = Field("", description="管理员 Telegram ID 列表，逗号分隔")
     support_group_id: int = Field(0, description="普通客服群组 Telegram ID")

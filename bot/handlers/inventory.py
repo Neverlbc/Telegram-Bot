@@ -611,27 +611,28 @@ def _price_template_labels(lang: str, tier: str) -> dict[str, str]:
 
 
 async def _enrich_descriptions(items: list[OutdoorPriceItem], lang: str) -> None:
-    """对缺少用户语言描述的 SKU，调用 OpenAI 把已有描述翻译过去并写回 item.descriptions。"""
-    if lang == "ru" or not items:
+    """仅对英文用户：把俄文描述用 DeepSeek 翻译成英文，写回 item.descriptions。
+
+    其他语言（zh/ru）不翻译——zh 用户走 description_for() 的回退链显示俄文原文。
+    """
+    if lang != "en" or not items:
         return
 
     pending: list[tuple[OutdoorPriceItem, str]] = []
     for item in items:
         descs = item.descriptions or {}
-        if descs.get(lang, "").strip():
-            continue  # 已有该语言描述
-        # 选一个非空的源文本作为翻译输入（优先俄文）
-        source = descs.get("ru") or descs.get("en") or descs.get("zh") or ""
-        source = source.strip()
-        if source:
-            pending.append((item, source))
+        if descs.get("en", "").strip():
+            continue  # Sheet 已有英文列
+        ru_text = (descs.get("ru") or "").strip()
+        if ru_text:
+            pending.append((item, ru_text))
 
     if not pending:
         return
 
     sources = list({source for _, source in pending})
     try:
-        translations = await translate_batch(sources, lang)
+        translations = await translate_batch(sources, "en")
     except Exception as e:
         logger.warning("description translation failed: %s", e)
         return
@@ -641,7 +642,7 @@ async def _enrich_descriptions(items: list[OutdoorPriceItem], lang: str) -> None
         if not translated or translated == source:
             continue
         descs = dict(item.descriptions or {})
-        descs[lang] = translated
+        descs["en"] = translated
         item.descriptions = descs
 
 
