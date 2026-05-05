@@ -214,6 +214,7 @@ async def _resolve_test_user_ids() -> list[int]:
         return _TEST_IDS_CACHE
 
     ids: set[int] = set(int(x) for x in settings.admin_id_list)
+    ids.update(int(x) for x in settings.analytics_test_user_id_list)
     usernames = settings.analytics_test_username_list
     if usernames:
         try:

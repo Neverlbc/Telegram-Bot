@@ -146,8 +146,12 @@ class Settings(BaseSettings):
     analytics_dashboard_port: int = Field(8088, description="Analytics dashboard HTTP port")
     analytics_dashboard_token: str = Field("", description="Optional dashboard access token")
     analytics_test_usernames: str = Field(
-        "Sarahhappyeveryyear,Sarahhappyeveryday,ABFOfficialGroup,Sakurabotterrun,ABFOfficialStoreCN,lbc",
+        "Sarahhappyeveryyear,Sarahhappyeveryday,ABFOfficialGroup,Sakurabotterrun,ABFOfficialStoreCN",
         description="测试账号 Telegram username 列表（不带 @），逗号分隔，默认从分析中排除",
+    )
+    analytics_test_user_ids: str = Field(
+        "8598254086",
+        description="测试账号 Telegram 数字 ID 列表，逗号分隔；用于无 username 或 username 解析不到的账号",
     )
 
     @property
@@ -156,6 +160,14 @@ class Settings(BaseSettings):
             u.strip().lstrip("@").lower()
             for u in self.analytics_test_usernames.split(",")
             if u.strip()
+        ]
+
+    @property
+    def analytics_test_user_id_list(self) -> list[int]:
+        return [
+            int(x.strip())
+            for x in self.analytics_test_user_ids.split(",")
+            if x.strip().lstrip("-").isdigit()
         ]
 
     @property
