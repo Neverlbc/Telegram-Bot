@@ -198,8 +198,8 @@ class WecomBotClient:
 
     async def _post_response_url(self, url: str, text: str) -> None:
         payload = {
-            "msgtype": "text",
-            "text": {"content": text},
+            "msgtype": "markdown",
+            "markdown": {"content": text},
         }
         try:
             async with aiohttp.ClientSession() as session:
