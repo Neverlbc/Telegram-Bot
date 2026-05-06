@@ -174,25 +174,31 @@ class WecomBotClient:
             raise RuntimeError("WebSocket 未连接")
         await self.ws.send(json.dumps(frame, ensure_ascii=False))
 
+    @staticmethod
+    def _strip_none(d: dict[str, Any]) -> dict[str, Any]:
+        return {k: v for k, v in d.items() if v is not None}
+
     async def reply_text(self, original_frame: dict[str, Any], text: str) -> None:
         """对一条 aibot_msg_callback 用流式帧一次性发完整文本。
 
-        长连接模式没有「单次完整回复」帧，必须用 stream + finish=true。
+        长连接模式回复必须用 msgtype=stream + stream.{id, finish, content} 嵌套结构，
+        不能用平铺字段。
         """
         body_in = original_frame.get("body") or {}
         stream_id = _gen_req_id("stream")
+        base_body = self._strip_none({
+            "msgid": body_in.get("msgid"),
+            "aibotid": body_in.get("aibotid"),
+            "chatid": body_in.get("chatid"),
+            "msgtype": "stream",
+        })
         # 第一帧：发内容，finish=false
         await self._send({
             "cmd": "aibot_respond_stream_msg",
             "headers": {"req_id": _gen_req_id("rsp")},
             "body": {
-                "msgid": body_in.get("msgid"),
-                "aibotid": body_in.get("aibotid"),
-                "chatid": body_in.get("chatid"),
-                "stream_id": stream_id,
-                "msgtype": "text",
-                "text": {"content": text},
-                "finish": False,
+                **base_body,
+                "stream": {"id": stream_id, "content": text, "finish": False},
             },
         })
         # 第二帧：空内容 + finish=true 收尾
@@ -200,30 +206,25 @@ class WecomBotClient:
             "cmd": "aibot_respond_stream_msg",
             "headers": {"req_id": _gen_req_id("rsp")},
             "body": {
-                "msgid": body_in.get("msgid"),
-                "aibotid": body_in.get("aibotid"),
-                "chatid": body_in.get("chatid"),
-                "stream_id": stream_id,
-                "msgtype": "text",
-                "text": {"content": ""},
-                "finish": True,
+                **base_body,
+                "stream": {"id": stream_id, "content": "", "finish": True},
             },
         })
         logger.info("[wecom-ws] 已回复消息 stream_id=%s len=%d", stream_id, len(text))
 
     async def reply_welcome(self, original_frame: dict[str, Any], text: str) -> None:
         body_in = original_frame.get("body") or {}
-        frame = {
+        body = self._strip_none({
+            "aibotid": body_in.get("aibotid"),
+            "chatid": body_in.get("chatid"),
+            "msgtype": "text",
+            "text": {"content": text},
+        })
+        await self._send({
             "cmd": "aibot_respond_welcome_msg",
             "headers": {"req_id": _gen_req_id("welcome")},
-            "body": {
-                "aibotid": body_in.get("aibotid"),
-                "chatid": body_in.get("chatid"),
-                "msgtype": "text",
-                "text": {"content": text},
-            },
-        }
-        await self._send(frame)
+            "body": body,
+        })
 
     async def close(self) -> None:
         self._closing = True
