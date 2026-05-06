@@ -54,12 +54,14 @@ async def chat_with_tools(user_text: str) -> str:
             content = (message.get("content") or "").strip()
             return content or "（LLM 返回为空）"
 
-        # 把 LLM 返回的 assistant 消息（含 tool_calls）追加到对话。
-        # OpenAI 规范：当有 tool_calls 时 content 应为 null（DeepSeek 也按此处理）。
-        assistant_msg: dict[str, Any] = {"role": "assistant", "tool_calls": tool_calls}
-        if message.get("content"):
-            assistant_msg["content"] = message["content"]
-        else:
+        # 把 LLM 返回的整条 assistant 消息追加回去（保留 reasoning_content / tool_calls /
+        # content 等所有字段）。DeepSeek V4 思考模式下，tool-call 轮次的 reasoning_content
+        # 必须原样回传，否则 400：`The reasoning_content in the thinking mode must be
+        # passed back to the API.`
+        assistant_msg = dict(message)  # 浅拷贝，避免被后续修改
+        assistant_msg.setdefault("role", "assistant")
+        if assistant_msg.get("content") in (None, ""):
+            # OpenAI 规范：有 tool_calls 时 content 可为 null
             assistant_msg["content"] = None
         messages.append(assistant_msg)
 
