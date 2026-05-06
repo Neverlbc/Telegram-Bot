@@ -54,12 +54,14 @@ async def chat_with_tools(user_text: str) -> str:
             content = (message.get("content") or "").strip()
             return content or "（LLM 返回为空）"
 
-        # 把 LLM 返回的 assistant 消息（含 tool_calls）追加到对话
-        messages.append({
-            "role": "assistant",
-            "content": message.get("content") or "",
-            "tool_calls": tool_calls,
-        })
+        # 把 LLM 返回的 assistant 消息（含 tool_calls）追加到对话。
+        # OpenAI 规范：当有 tool_calls 时 content 应为 null（DeepSeek 也按此处理）。
+        assistant_msg: dict[str, Any] = {"role": "assistant", "tool_calls": tool_calls}
+        if message.get("content"):
+            assistant_msg["content"] = message["content"]
+        else:
+            assistant_msg["content"] = None
+        messages.append(assistant_msg)
 
         # 依次执行 tool_calls，把结果追加为 role=tool 消息
         for call in tool_calls:
@@ -77,25 +79,30 @@ async def chat_with_tools(user_text: str) -> str:
                 try:
                     tool_result = await handler(**tool_args)
                 except TypeError:
-                    # 容错：参数对不上时不带参再试
                     tool_result = await handler()
                 except Exception as exc:
                     logger.exception("tool %s execution failed", tool_name)
                     tool_result = f"工具 {tool_name} 执行出错：{exc}"
 
+            tool_call_id = call.get("id") or call.get("tool_call_id") or ""
+            if not tool_call_id:
+                # DeepSeek 必须有 tool_call_id 配对，否则 400
+                logger.warning("[wecom-llm] tool_call 缺 id，强行生成占位值")
+                tool_call_id = f"call_{tool_name}"
             messages.append({
                 "role": "tool",
-                "tool_call_id": call.get("id", ""),
-                "content": tool_result,
+                "tool_call_id": tool_call_id,
+                "content": str(tool_result) if tool_result else "(空)",
             })
-            logger.info("[wecom-llm] tool=%s args=%s len=%d", tool_name, tool_args, len(tool_result))
+            logger.info("[wecom-llm] tool=%s id=%s args=%s len=%d",
+                        tool_name, tool_call_id, tool_args, len(tool_result))
 
     return "❌ 工具调用循环超过上限，未能给出结论。"
 
 
 async def _call_deepseek(messages: list[dict[str, Any]]) -> dict[str, Any]:
     payload = {
-        "model": settings.deepseek_model or "deepseek-v4-flash",
+        "model": settings.deepseek_model or "deepseek-chat",
         "messages": messages,
         "tools": TOOL_SCHEMAS,
         "tool_choice": "auto",
@@ -112,5 +119,17 @@ async def _call_deepseek(messages: list[dict[str, Any]]) -> dict[str, Any]:
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=60),
         ) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+            text = await resp.text()
+            if resp.status >= 400:
+                logger.error(
+                    "DeepSeek HTTP %s body=%s payload_messages=%s",
+                    resp.status, text[:1000],
+                    [{"role": m.get("role"), "has_content": bool(m.get("content")),
+                      "has_tool_calls": bool(m.get("tool_calls")),
+                      "tool_call_id": m.get("tool_call_id", "")} for m in messages],
+                )
+                raise RuntimeError(f"DeepSeek {resp.status}: {text[:300]}")
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                raise RuntimeError(f"DeepSeek 返回非 JSON: {text[:300]}")
