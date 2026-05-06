@@ -13,6 +13,9 @@ from sqlalchemy import func, select
 
 from bot.models import async_session
 from bot.models.analytics import AnalyticsEvent
+from bot.models.user import User
+from bot.services.discount_sheet import find_discount_by_sku, fuzzy_find, get_discounts
+from bot.services.outdoor_prices import get_outdoor_price_brand_titles, get_outdoor_price_items
 from bot.services.outdoor_sheets import OutdoorItem, get_outdoor_inventory
 from bot.services.service_center_sheet import get_repair_status, get_repair_status_by_sn
 from bot.services.sn_sheet import search_sn
@@ -185,6 +188,161 @@ async def tool_get_daily_report(period_days: int = 1) -> str:
     return "\n".join(lines).rstrip()
 
 
+_PRICE_LABELS: dict[str, str] = {
+    "rub": "卢布",
+    "cny": "人民币",
+    "cny_ru": "人民币(俄货)",
+    "cny_cn": "人民币(国内)",
+    "usd": "美元",
+}
+
+
+async def tool_query_price(sku: str, tier: str = "svip", brand: str = "") -> str:
+    """查询指定 SKU 的价格（RUB/CNY）。
+
+    tier: vip=仅卢布 / svip=卢布+人民币（默认）/ vvip=美元+卢布+人民币
+    brand: 品牌名可选（填写可加快搜索速度）
+    """
+    tier_norm = (tier or "svip").lower()
+    if tier_norm not in {"vip", "svip", "vvip"}:
+        tier_norm = "svip"
+    sku_q = (sku or "").strip()
+    if not sku_q:
+        return "❌ 请提供 SKU 型号。"
+
+    try:
+        all_titles = await get_outdoor_price_brand_titles()
+    except Exception as exc:
+        logger.exception("get_outdoor_price_brand_titles failed")
+        return f"❌ 获取品牌列表失败：{exc}"
+
+    # 如果指定了品牌，只搜该品牌
+    brand_q = (brand or "").strip().casefold()
+    search_titles = (
+        [t for t in all_titles if brand_q in t.casefold()] or all_titles
+        if brand_q else all_titles
+    )
+
+    import re
+    sku_pattern = re.sub(r"\s+", "", sku_q).casefold()
+    found: list[tuple[str, str, dict[str, str]]] = []  # (brand, sku, prices)
+
+    for title in search_titles:
+        try:
+            items, _ = await get_outdoor_price_items(title, tier_norm)
+        except Exception:
+            continue
+        for item in items:
+            item_key = re.sub(r"\s+", "", item.sku).casefold()
+            if sku_pattern in item_key or item_key in sku_pattern:
+                found.append((title, item.sku, item.prices or {}))
+        if found and brand_q:
+            break  # 指定品牌时找到即停
+
+    if not found:
+        return f"❌ 未找到 {sku_q} 的价格数据（已查 {len(search_titles)} 个品牌 tab）。"
+
+    lines: list[str] = [f"💰 价格查询（{tier_norm.upper()} 档）\n"]
+    for brand_title, sku_val, prices in found[:5]:
+        lines.append(f"【{brand_title}】{sku_val}")
+        if prices:
+            for key, val in prices.items():
+                label = _PRICE_LABELS.get(key, key)
+                lines.append(f"  {label}：{val}")
+        else:
+            lines.append("  暂无价格数据")
+        lines.append("")
+    if len(found) > 5:
+        lines.append(f"…共 {len(found)} 条，已显示前 5 条")
+    return "\n".join(lines).rstrip()
+
+
+async def tool_get_discount(sku: str = "") -> str:
+    """查询 Vandych VIP 折扣信息。不传 sku 则列出所有有效折扣。"""
+    try:
+        items = await get_discounts()
+    except Exception as exc:
+        logger.exception("tool_get_discount failed")
+        return f"❌ 获取折扣数据失败：{exc}"
+
+    if not items:
+        return "📭 当前没有有效的折扣数据。"
+
+    q = (sku or "").strip()
+    if q:
+        matches = fuzzy_find(items, q)
+        if not matches:
+            return f"❌ 未找到 {q} 的折扣信息。"
+        target_items = [item for _, item in matches[:5]]
+    else:
+        target_items = items[:20]
+
+    lines = ["🏷️ 折扣信息\n"]
+    for item in target_items:
+        lines.append(f"**{item.model}**")
+        if item.discount:
+            lines.append(f"  折扣：{item.discount}")
+        if item.code and item.code.casefold() not in ("discount", ""):
+            lines.append(f"  折扣码：{item.code}")
+        if item.link and item.link.casefold() not in ("links", "link", ""):
+            lines.append(f"  链接：{item.link}")
+        if item.notes:
+            lines.append(f"  备注：{item.notes}")
+        lines.append("")
+    if not q and len(items) > 20:
+        lines.append(f"…共 {len(items)} 条，已显示前 20 条")
+    return "\n".join(lines).rstrip()
+
+
+async def tool_get_user_ranking(period_days: int = 1, top_n: int = 10) -> str:
+    """查询 Telegram Bot 活跃用户排行（按事件数排序）。"""
+    today = date.today()
+    since = datetime.combine(today - timedelta(days=period_days - 1), time.min)
+    until = datetime.combine(today + timedelta(days=1), time.min)
+    label = "今天" if period_days == 1 else f"近 {period_days} 天"
+
+    try:
+        async with async_session() as session:
+            rows = (await session.execute(
+                select(
+                    AnalyticsEvent.telegram_id,
+                    func.count(AnalyticsEvent.id).label("cnt"),
+                )
+                .where(
+                    AnalyticsEvent.created_at >= since,
+                    AnalyticsEvent.created_at < until,
+                    AnalyticsEvent.telegram_id.is_not(None),
+                )
+                .group_by(AnalyticsEvent.telegram_id)
+                .order_by(func.count(AnalyticsEvent.id).desc())
+                .limit(top_n)
+            )).all()
+
+            # 批量查用户名
+            tg_ids = [r.telegram_id for r in rows]
+            user_map: dict[int, str] = {}
+            if tg_ids:
+                users = (await session.execute(
+                    select(User.telegram_id, User.username, User.first_name)
+                    .where(User.telegram_id.in_(tg_ids))
+                )).all()
+                for u in users:
+                    name = f"@{u.username}" if u.username else (u.first_name or str(u.telegram_id))
+                    user_map[u.telegram_id] = name
+    except Exception as exc:
+        logger.exception("tool_get_user_ranking failed")
+        return f"❌ 获取用户排行失败：{exc}"
+
+    if not rows:
+        return f"📊 {label} 暂无用户数据。"
+
+    lines = [f"🏆 {label} 用户活跃排行（Top {top_n}）\n"]
+    for rank, row in enumerate(rows, 1):
+        name = user_map.get(row.telegram_id, str(row.telegram_id))
+        lines.append(f"{rank}. {name} — {row.cnt} 次")
+    return "\n".join(lines)
+
+
 async def tool_search_sn(sn: str) -> str:
     """在跨品牌 SN 数据库中查找序列号，确认设备是否由 A-BF 供货。"""
     q = (sn or "").strip()
@@ -316,6 +474,83 @@ TOOL_SCHEMAS += [
     {
         "type": "function",
         "function": {
+            "name": "query_price",
+            "description": (
+                "查询莫斯科户外类产品价格（卢布/人民币/美元）。"
+                "当用户询问某个 SKU/型号的价格、报价、多少钱时调用。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sku": {
+                        "type": "string",
+                        "description": "产品型号或 SKU，如 HT-70LRF、GEH50R",
+                    },
+                    "tier": {
+                        "type": "string",
+                        "enum": ["vip", "svip", "vvip"],
+                        "description": "价格等级：vip=卢布、svip=卢布+人民币（默认）、vvip=加美元",
+                    },
+                    "brand": {
+                        "type": "string",
+                        "description": "品牌名（可选，填写可加快搜索），如 Sytong、Longot、Infiray",
+                    },
+                },
+                "required": ["sku"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_discount",
+            "description": (
+                "查询 Vandych VIP 折扣码和促销信息。"
+                "当用户问折扣、优惠码、促销活动时调用。不传 sku 则列出所有有效折扣。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sku": {
+                        "type": "string",
+                        "description": "产品型号（可选，不填则返回全部折扣列表）",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_user_ranking",
+            "description": (
+                "查询 Telegram Bot 用户活跃度排行榜（按事件数从多到少）。"
+                "当用户问「谁最活跃」「活跃用户排行」「Top 用户」时调用。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "period_days": {
+                        "type": "integer",
+                        "description": "统计天数：1=今天（默认）、7=近 7 天、30=近 30 天",
+                        "minimum": 1,
+                        "maximum": 90,
+                    },
+                    "top_n": {
+                        "type": "integer",
+                        "description": "显示前 N 名，默认 10",
+                        "minimum": 1,
+                        "maximum": 30,
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_sn",
             "description": (
                 "在 A-BF 设备数据库中查询序列号（SN），确认该设备是否由我司供货。"
@@ -360,6 +595,9 @@ TOOL_SCHEMAS += [
 TOOL_HANDLERS = {
     "get_inventory": tool_get_inventory,
     "get_daily_report": tool_get_daily_report,
+    "query_price": tool_query_price,
+    "get_discount": tool_get_discount,
+    "get_user_ranking": tool_get_user_ranking,
     "search_sn": tool_search_sn,
     "check_repair": tool_check_repair,
 }
