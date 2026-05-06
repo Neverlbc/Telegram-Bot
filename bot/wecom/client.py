@@ -197,10 +197,9 @@ class WecomBotClient:
         await self._reply_via_ws(body_in, text)
 
     async def _post_response_url(self, url: str, text: str) -> None:
-        stream_id = _gen_req_id("stream")
         payload = {
-            "msgtype": "stream",
-            "stream": {"id": stream_id, "content": text, "finish": True},
+            "msgtype": "text",
+            "text": {"content": text},
         }
         try:
             async with aiohttp.ClientSession() as session:
