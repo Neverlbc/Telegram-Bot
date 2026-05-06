@@ -83,6 +83,19 @@ services:
     networks:
       - bot-network
 
+  # ── 企业微信智能机器人（长连接，仅需出站 wss）─────────
+  wecom-agent:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: python -m bot.wecom
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bot-network
+
 volumes:
   redis_data:
 

@@ -22,5 +22,8 @@ google-auth>=2.29.0
 # Excel 导出（埋点 dashboard）
 openpyxl>=3.1.0
 
+# 企业微信智能机器人长连接（WebSocket）
+websockets>=13.0
+
 # Logging
 structlog>=24.4.0

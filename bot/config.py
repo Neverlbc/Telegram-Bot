@@ -154,6 +154,15 @@ class Settings(BaseSettings):
         description="测试账号 Telegram 数字 ID 列表，逗号分隔；用于无 username 或 username 解析不到的账号",
     )
 
+    # ── 企业微信智能机器人 (WeCom AI Bot, 长连接) ─────
+    wecom_bot_id: str = Field("", description="企业微信智能机器人 BotID（管理后台 → 智能机器人）")
+    wecom_bot_secret: str = Field("", description="企业微信智能机器人长连接专用 Secret")
+    wecom_bot_name: str = Field("A-BF助手", description="智能机器人对外显示名称（用于欢迎语）")
+    wecom_ws_url: str = Field(
+        "wss://openws.work.weixin.qq.com",
+        description="企业微信长连接 WebSocket 网关",
+    )
+
     @property
     def analytics_test_username_list(self) -> list[str]:
         return [

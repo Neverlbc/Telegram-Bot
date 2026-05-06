@@ -52,6 +52,11 @@ bot/
 ├── repair_monitor.py        # 独立脚本：轮询检修状态变更并推送通知
 ├── sync.py                  # 独立脚本：手动触发库存同步
 ├── analytics_dashboard.py   # 独立 aiohttp Web 服务：用户埋点看板（端口 8088）
+├── wecom/                   # 企业微信智能机器人（长连接 WebSocket）
+│   ├── __main__.py          #   入口：python -m bot.wecom
+│   ├── client.py            #   WebSocket 客户端 + 心跳 + 重连
+│   ├── tools.py             #   LLM 可调用工具：库存查询、日报
+│   └── llm.py               #   DeepSeek tool-calling
 ├── handlers/                # aiogram Router，按功能拆分
 │   ├── start.py             #   /start、语言选择
 │   ├── menu.py              #   /menu、/cancel、主菜单、NavCallback 路由
@@ -197,6 +202,21 @@ QTYS = KYB 俄罗斯仓 tocUsableQty (可用数量) − JST 俄罗斯仓 order_l
 基于全时间窗口的 `hidden_access.password_success` 事件推导，等级优先级：
 `vvip > svip > vip > vandych > service_admin > public`
 
+## 企业微信智能机器人（bot/wecom/）
+
+**面向内部团队**的协同 agent，长连接 WebSocket（无需公网 HTTPS 回调）。
+
+- 接入方式：企业微信管理后台 → 智能机器人 → API 模式 → 选「长连接」→ 拿到 `bot_id` + `secret`
+- 连接 `wss://openws.work.weixin.qq.com`，发 `aibot_subscribe` 鉴权，30s 一次心跳
+- 支持私聊 + 群 @ 机器人；群聊文本会自动剥掉 `@<botname>` 前缀
+- 自然语言意图识别：DeepSeek tool-calling，最多循环 3 轮防死循环
+- 当前工具：
+  - `get_inventory(tier)` — 莫斯科户外库存清单
+  - `get_daily_report(period_days)` — Telegram Bot 用户埋点日报
+- 关键 env：`WECOM_BOT_ID` / `WECOM_BOT_SECRET` / `WECOM_BOT_NAME` / `WECOM_WS_URL`
+
+容器服务名 `wecom-agent`，独立运行，不与 Telegram bot 共享进程。
+
 ## 密码 / Token / API Key 配置
 
 | 变量 | 用途 |
@@ -220,6 +240,10 @@ QTYS = KYB 俄罗斯仓 tocUsableQty (可用数量) − JST 俄罗斯仓 order_l
 | `ANALYTICS_TEST_USERNAMES` | 测试账号 username 列表（不带 @） |
 | `ANALYTICS_TEST_USER_IDS` | 测试账号 telegram_id 列表（数字） |
 | `ADMIN_IDS` | 管理员 telegram_id 列表，也参与测试账号过滤 |
+| `WECOM_BOT_ID` | 企业微信智能机器人 BotID |
+| `WECOM_BOT_SECRET` | 企业微信智能机器人长连接 Secret |
+| `WECOM_BOT_NAME` | 机器人对外显示名（默认 `A-BF助手`） |
+| `WECOM_WS_URL` | 长连接 WSS 网关（默认 `wss://openws.work.weixin.qq.com`） |
 
 ## Google Sheet 配置
 
@@ -306,6 +330,7 @@ header 文本规则化后按如下顺序匹配语言：
 | `inventory-sync` | 每 5 分钟同步库存，外层 `timeout 240` 防卡死 |
 | `repair-monitor` | 每 5 分钟轮询检修状态变更 |
 | `analytics-dashboard` | aiohttp Web 服务（端口 8088） |
+| `wecom-agent` | 企业微信智能机器人长连接（仅出站，无端口暴露） |
 
 ## 部署注意事项
 
