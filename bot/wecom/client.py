@@ -10,14 +10,17 @@
     }
 
 关键命令：
-    aibot_subscribe                — 客户端 → 服务端，带 bot_id+secret 鉴权
-    aibot_msg_callback             — 服务端 → 客户端，用户发来消息
-    aibot_event_callback           — 服务端 → 客户端，事件（首次进入会话等）
-    aibot_respond_msg              — 客户端 → 服务端，回复消息
-    aibot_respond_welcome_msg      — 客户端 → 服务端，回复欢迎语
-    aibot_respond_stream_msg       — 客户端 → 服务端，流式回复增量
+    aibot_subscribe            — 客户端 → 服务端，带 bot_id+secret 鉴权
+    aibot_msg_callback         — 服务端 → 客户端，用户发来消息
+    aibot_event_callback       — 服务端 → 客户端，事件（首次进入会话等）
+    aibot_respond_msg          — 客户端 → 服务端，回复消息（含流式）
+    aibot_respond_welcome_msg  — 客户端 → 服务端，回复欢迎语
 
-具体帧名以服务端实际接受为准，遇到错误日志时可调整。
+回复规则（长连接模式）：
+    - headers.req_id 必须与原始消息相同，企业微信用它关联响应
+    - body 只需 {msgtype: "stream", stream: {id, content, finish}}
+    - stream.id 相同的帧构成一条流式消息；finish=true 结束并锁定内容
+    - response_url 仅供 HTTP 回调模式使用，长连接模式勿用
 """
 
 from __future__ import annotations
@@ -29,11 +32,8 @@ import secrets
 import string
 from typing import Any, Awaitable, Callable
 
-import aiohttp
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
-
-from bot.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class WecomBotClient:
         while not self._closing:
             try:
                 await self._run_once()
-                delay = RECONNECT_BASE_DELAY  # 成功一次重置退避
+                delay = RECONNECT_BASE_DELAY
             except (ConnectionClosed, WebSocketException, asyncio.TimeoutError) as exc:
                 logger.warning("[wecom-ws] 连接断开: %s", exc)
             except Exception:
@@ -160,7 +160,6 @@ class WecomBotClient:
                 except Exception:
                     logger.exception("on_event 处理失败")
         elif cmd.endswith("_resp") or cmd.endswith("_ack") or "pong" in cmd or "ping" in cmd:
-            # 服务端的响应/心跳确认，打印简略信息
             err_code = body.get("errcode") if isinstance(body, dict) else None
             err_msg = body.get("errmsg") if isinstance(body, dict) else None
             if err_code:
@@ -175,87 +174,55 @@ class WecomBotClient:
             raise RuntimeError("WebSocket 未连接")
         await self.ws.send(json.dumps(frame, ensure_ascii=False))
 
-    @staticmethod
-    def _strip_none(d: dict[str, Any]) -> dict[str, Any]:
-        return {k: v for k, v in d.items() if v is not None}
+    def new_stream_id(self) -> str:
+        return _gen_req_id("stream")
 
-    async def reply_text(self, original_frame: dict[str, Any], text: str) -> None:
-        """回复一条用户消息。
+    async def reply_stream(
+        self,
+        original_frame: dict[str, Any],
+        stream_id: str,
+        content: str,
+        finish: bool,
+    ) -> None:
+        """发送一帧流式回复。
 
-        企业微信支持两种回路：
-        1) 消息体携带 response_url 时：HTTP POST 到该 URL（OpenClaw / 自建应用回调模式）
-        2) 否则走 WebSocket aibot_respond_stream_msg 帧（纯长连接模式）
-
-        实测：用户的 bot 走 (1)。
+        req_id 必须与原始消息一致；stream_id 相同的帧构成一条流式消息。
+        finish=False 创建/更新占位内容；finish=True 最终锁定。
         """
-        body_in = original_frame.get("body") or {}
-        response_url = body_in.get("response_url") or ""
-
-        if response_url:
-            await self._post_response_url(response_url, text)
-            return
-        await self._reply_via_ws(body_in, text)
-
-    async def _post_response_url(self, url: str, text: str) -> None:
-        payload = {
-            "msgtype": "markdown",
-            "markdown": {"content": text},
-        }
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=15),
-                ) as resp:
-                    body = await resp.text()
-                    if resp.status >= 400:
-                        logger.error(
-                            "[wecom-http] POST response_url 失败 status=%s body=%s",
-                            resp.status, body[:300],
-                        )
-                        return
-                    logger.info(
-                        "[wecom-http] 已 POST 回复 status=%s len=%d body=%s",
-                        resp.status, len(text), body[:200],
-                    )
-        except Exception as exc:
-            logger.exception("[wecom-http] POST response_url 异常: %s", exc)
-
-    async def _reply_via_ws(self, body_in: dict[str, Any], text: str) -> None:
-        stream_id = _gen_req_id("stream")
-        base_body = self._strip_none({
-            "msgid": body_in.get("msgid"),
-            "aibotid": body_in.get("aibotid"),
-            "chatid": body_in.get("chatid"),
-            "msgtype": "stream",
-        })
+        req_id = original_frame.get("headers", {}).get("req_id") or _gen_req_id("rsp")
         await self._send({
-            "cmd": "aibot_respond_stream_msg",
-            "headers": {"req_id": _gen_req_id("rsp")},
+            "cmd": "aibot_respond_msg",
+            "headers": {"req_id": req_id},
             "body": {
-                **base_body,
-                "stream": {"id": stream_id, "content": text, "finish": False},
+                "msgtype": "stream",
+                "stream": {"id": stream_id, "content": content, "finish": finish},
             },
         })
-        await self._send({
-            "cmd": "aibot_respond_stream_msg",
-            "headers": {"req_id": _gen_req_id("rsp")},
-            "body": {
-                **base_body,
-                "stream": {"id": stream_id, "content": "", "finish": True},
-            },
-        })
-        logger.info("[wecom-ws] 已经 WS 回复 stream_id=%s len=%d", stream_id, len(text))
+
+    async def reply_text(
+        self,
+        original_frame: dict[str, Any],
+        text: str,
+        stream_id: str | None = None,
+    ) -> None:
+        """用 stream_id 回复完整文本（finish=True 一帧结束）。
+
+        若已提前发过 finish=False 占位帧，传入相同 stream_id 可让企业微信
+        客户端用最终内容替换占位文字。
+        """
+        sid = stream_id or _gen_req_id("stream")
+        await self.reply_stream(original_frame, sid, text, True)
+        logger.info("[wecom-ws] 已回复 stream_id=%s len=%d", sid, len(text))
 
     async def reply_welcome(self, original_frame: dict[str, Any], text: str) -> None:
         body_in = original_frame.get("body") or {}
-        body = self._strip_none({
-            "aibotid": body_in.get("aibotid"),
-            "chatid": body_in.get("chatid"),
-            "msgtype": "text",
-            "text": {"content": text},
-        })
+        body: dict[str, Any] = {"msgtype": "text", "text": {"content": text}}
+        aibotid = body_in.get("aibotid")
+        chatid = body_in.get("chatid")
+        if aibotid:
+            body["aibotid"] = aibotid
+        if chatid:
+            body["chatid"] = chatid
         await self._send({
             "cmd": "aibot_respond_welcome_msg",
             "headers": {"req_id": _gen_req_id("welcome")},

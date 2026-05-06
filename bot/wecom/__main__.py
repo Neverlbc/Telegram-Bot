@@ -36,7 +36,9 @@ async def main_async() -> None:
 
     client: WecomBotClient | None = None
 
-    async def _handle_message_async(frame: dict[str, Any], text: str) -> None:
+    async def _handle_message_async(
+        frame: dict[str, Any], text: str, stream_id: str
+    ) -> None:
         """LLM 处理 + 回复，独立 task 跑，不阻塞 WebSocket 主循环."""
         logger.info("[wecom] LLM 开始处理: %r", text[:80])
         try:
@@ -48,7 +50,8 @@ async def main_async() -> None:
 
         if client is not None:
             try:
-                await client.reply_text(frame, reply)
+                # 同一 stream_id + finish=True，企业微信客户端用最终内容替换占位文字
+                await client.reply_text(frame, reply, stream_id=stream_id)
             except Exception:
                 logger.exception("回复消息失败")
 
@@ -62,8 +65,18 @@ async def main_async() -> None:
         if not text:
             return  # 非文本消息忽略
 
-        # 把 LLM + 回复放到后台任务，不阻塞 WS 主循环（避免心跳超时）
-        asyncio.create_task(_handle_message_async(frame, text))
+        if client is None:
+            return
+
+        # 立即发占位帧（finish=False），让用户看到"处理中"而非空白等待
+        stream_id = client.new_stream_id()
+        try:
+            await client.reply_stream(frame, stream_id, "🤔 处理中，请稍候…", False)
+        except Exception:
+            logger.exception("发送占位帧失败")
+
+        # LLM + 最终回复放后台，不阻塞 WS 主循环
+        asyncio.create_task(_handle_message_async(frame, text, stream_id))
 
     async def on_event(frame: dict[str, Any]) -> None:
         body = frame.get("body") or {}
