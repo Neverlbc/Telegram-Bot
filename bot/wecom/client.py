@@ -108,18 +108,23 @@ class WecomBotClient:
         logger.info("[wecom-ws] 已发送订阅帧 bot_id=%s", self.bot_id[:6] + "…")
 
     async def _heartbeat_loop(self) -> None:
+        """业务层心跳：发 cmd=aibot_ping 的 JSON 帧。
+
+        企业微信不接受 WebSocket 协议层 ping（会触发 1002 protocol error）。
+        """
         try:
             while True:
                 await asyncio.sleep(HEARTBEAT_INTERVAL)
                 if self.ws is None:
                     return
-                # 用 WebSocket 协议层 ping；服务端不要求业务层 ping 帧
                 try:
-                    pong = await self.ws.ping()
-                    await asyncio.wait_for(pong, timeout=10)
-                except asyncio.TimeoutError:
-                    logger.warning("[wecom-ws] 心跳 pong 超时")
-                    await self.ws.close()
+                    await self._send({
+                        "cmd": "aibot_ping",
+                        "headers": {"req_id": _gen_req_id("hb")},
+                        "body": {},
+                    })
+                except Exception as e:
+                    logger.warning("[wecom-ws] 心跳发送失败: %s", e)
                     return
         except asyncio.CancelledError:
             return
@@ -134,9 +139,13 @@ class WecomBotClient:
             return
 
         cmd = frame.get("cmd", "")
-        logger.info("[wecom-ws] 收到 cmd=%s req_id=%s",
-                    cmd, frame.get("headers", {}).get("req_id", ""))
-        logger.debug("[wecom-ws] frame: %s", frame)
+        body = frame.get("body") or {}
+        logger.info(
+            "[wecom-ws] 收到 cmd=%s req_id=%s body_keys=%s",
+            cmd,
+            frame.get("headers", {}).get("req_id", ""),
+            list(body.keys()),
+        )
 
         if cmd == "aibot_msg_callback":
             try:
@@ -149,10 +158,16 @@ class WecomBotClient:
                     await self.on_event(frame)
                 except Exception:
                     logger.exception("on_event 处理失败")
-        elif cmd in {"aibot_subscribe_ack", "aibot_subscribe_resp"}:
-            body = frame.get("body") or {}
-            logger.info("[wecom-ws] 订阅回执 %s", body)
-        # 其它 cmd 直接打日志即可
+        elif cmd.endswith("_resp") or cmd.endswith("_ack") or "pong" in cmd or "ping" in cmd:
+            # 服务端的响应/心跳确认，打印简略信息
+            err_code = body.get("errcode") if isinstance(body, dict) else None
+            err_msg = body.get("errmsg") if isinstance(body, dict) else None
+            if err_code:
+                logger.warning("[wecom-ws] %s 错误 code=%s msg=%s", cmd, err_code, err_msg)
+            else:
+                logger.info("[wecom-ws] %s body=%s", cmd, body)
+        else:
+            logger.info("[wecom-ws] 未知 cmd=%s body=%s", cmd, body)
 
     async def _send(self, frame: dict[str, Any]) -> None:
         if self.ws is None:
@@ -160,21 +175,41 @@ class WecomBotClient:
         await self.ws.send(json.dumps(frame, ensure_ascii=False))
 
     async def reply_text(self, original_frame: dict[str, Any], text: str) -> None:
-        """对一条 aibot_msg_callback 回一条普通文本消息."""
+        """对一条 aibot_msg_callback 用流式帧一次性发完整文本。
+
+        长连接模式没有「单次完整回复」帧，必须用 stream + finish=true。
+        """
         body_in = original_frame.get("body") or {}
-        out_body = {
-            "msgid": body_in.get("msgid"),
-            "aibotid": body_in.get("aibotid"),
-            "chatid": body_in.get("chatid"),
-            "msgtype": "text",
-            "text": {"content": text},
-        }
-        frame = {
-            "cmd": "aibot_respond_msg",
+        stream_id = _gen_req_id("stream")
+        # 第一帧：发内容，finish=false
+        await self._send({
+            "cmd": "aibot_respond_stream_msg",
             "headers": {"req_id": _gen_req_id("rsp")},
-            "body": {k: v for k, v in out_body.items() if v is not None},
-        }
-        await self._send(frame)
+            "body": {
+                "msgid": body_in.get("msgid"),
+                "aibotid": body_in.get("aibotid"),
+                "chatid": body_in.get("chatid"),
+                "stream_id": stream_id,
+                "msgtype": "text",
+                "text": {"content": text},
+                "finish": False,
+            },
+        })
+        # 第二帧：空内容 + finish=true 收尾
+        await self._send({
+            "cmd": "aibot_respond_stream_msg",
+            "headers": {"req_id": _gen_req_id("rsp")},
+            "body": {
+                "msgid": body_in.get("msgid"),
+                "aibotid": body_in.get("aibotid"),
+                "chatid": body_in.get("chatid"),
+                "stream_id": stream_id,
+                "msgtype": "text",
+                "text": {"content": ""},
+                "finish": True,
+            },
+        })
+        logger.info("[wecom-ws] 已回复消息 stream_id=%s len=%d", stream_id, len(text))
 
     async def reply_welcome(self, original_frame: dict[str, Any], text: str) -> None:
         body_in = original_frame.get("body") or {}

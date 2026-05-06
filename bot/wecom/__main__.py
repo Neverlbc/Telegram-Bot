@@ -36,6 +36,22 @@ async def main_async() -> None:
 
     client: WecomBotClient | None = None
 
+    async def _handle_message_async(frame: dict[str, Any], text: str) -> None:
+        """LLM 处理 + 回复，独立 task 跑，不阻塞 WebSocket 主循环."""
+        logger.info("[wecom] LLM 开始处理: %r", text[:80])
+        try:
+            reply = await chat_with_tools(text)
+            logger.info("[wecom] LLM 完成 len=%d preview=%r", len(reply), reply[:80])
+        except Exception as exc:
+            logger.exception("LLM dispatch failed")
+            reply = f"❌ 处理消息时出错：{exc}"
+
+        if client is not None:
+            try:
+                await client.reply_text(frame, reply)
+            except Exception:
+                logger.exception("回复消息失败")
+
     async def on_message(frame: dict[str, Any]) -> None:
         body = frame.get("body") or {}
         chat_type = body.get("chattype", "single")
@@ -46,17 +62,8 @@ async def main_async() -> None:
         if not text:
             return  # 非文本消息忽略
 
-        try:
-            reply = await chat_with_tools(text)
-        except Exception as exc:
-            logger.exception("LLM dispatch failed")
-            reply = f"❌ 处理消息时出错：{exc}"
-
-        if client is not None:
-            try:
-                await client.reply_text(frame, reply)
-            except Exception:
-                logger.exception("回复消息失败")
+        # 把 LLM + 回复放到后台任务，不阻塞 WS 主循环（避免心跳超时）
+        asyncio.create_task(_handle_message_async(frame, text))
 
     async def on_event(frame: dict[str, Any]) -> None:
         body = frame.get("body") or {}
