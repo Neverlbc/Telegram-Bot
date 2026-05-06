@@ -14,6 +14,8 @@ from sqlalchemy import func, select
 from bot.models import async_session
 from bot.models.analytics import AnalyticsEvent
 from bot.services.outdoor_sheets import OutdoorItem, get_outdoor_inventory
+from bot.services.service_center_sheet import get_repair_status, get_repair_status_by_sn
+from bot.services.sn_sheet import search_sn
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +185,65 @@ async def tool_get_daily_report(period_days: int = 1) -> str:
     return "\n".join(lines).rstrip()
 
 
+async def tool_search_sn(sn: str) -> str:
+    """在跨品牌 SN 数据库中查找序列号，确认设备是否由 A-BF 供货。"""
+    q = (sn or "").strip()
+    if not q:
+        return "❌ 请提供序列号。"
+    try:
+        records = await search_sn(q)
+    except Exception as exc:
+        logger.exception("tool_search_sn failed")
+        return f"❌ 查询序列号失败：{exc}"
+
+    if not records:
+        return f"❌ 数据库中未找到序列号 {q.upper()}。该设备可能不是由 A-BF 供货，或序列号有误。"
+
+    lines = [f"✅ 找到序列号 {q.upper()}，设备由 A-BF 供货：", ""]
+    for r in records:
+        lines.append(f"品牌：{r.brand}")
+        lines.append(f"型号：{r.model}")
+        lines.append(f"序列号：{r.sn}")
+        if r.notes and r.notes.lower() not in ("", "notes"):
+            lines.append(f"备注：{r.notes}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
+async def tool_check_repair(query: str) -> str:
+    """根据 CDEK 快递单号或 SN 序列号查询俄罗斯服务中心检修状态。"""
+    q = (query or "").strip()
+    if not q:
+        return "❌ 请提供 CDEK 单号或设备序列号。"
+    try:
+        record = await get_repair_status(q)
+        if record is None:
+            record = await get_repair_status_by_sn(q)
+    except Exception as exc:
+        logger.exception("tool_check_repair failed")
+        return f"❌ 查询检修状态失败：{exc}"
+
+    if record is None:
+        return f"❌ 未找到 {q} 的检修记录（已查 CDEK 单号和序列号）。"
+
+    emoji = record.status_emoji()
+    lines = [f"{emoji} 检修记录", ""]
+    if record.cdek_in:
+        lines.append(f"CDEK 入库单号：{record.cdek_in}")
+    if record.sn:
+        lines.append(f"序列号：{record.sn}")
+    if record.model:
+        lines.append(f"型号：{record.model}")
+    lines.append(f"状态：{record.status}")
+    if record.cdek_out:
+        lines.append(f"回寄单号：{record.cdek_out}")
+    if record.repair_summary:
+        lines.append(f"维修报告：{record.repair_summary}")
+    if record.notes:
+        lines.append(f"备注：{record.notes}")
+    return "\n".join(lines)
+
+
 def _module_label(code: str) -> str:
     mapping = {
         "menu": "主菜单",
@@ -251,7 +312,54 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 ]
 
 
+TOOL_SCHEMAS += [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_sn",
+            "description": (
+                "在 A-BF 设备数据库中查询序列号（SN），确认该设备是否由我司供货。"
+                "支持 Infiray、Sytong、Longot、NNPO、Pard、Airsoft、DNT 等品牌。"
+                "当用户提供 SN / 序列号并询问设备来源、真假验证时调用。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sn": {
+                        "type": "string",
+                        "description": "设备序列号，原样传入（不区分大小写）",
+                    },
+                },
+                "required": ["sn"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_repair",
+            "description": (
+                "查询俄罗斯服务中心的设备检修/维修状态。"
+                "支持用 CDEK 快递单号或 SN 序列号查询。"
+                "当用户询问「检修」「维修状态」「CDEK」「修好了吗」等时调用。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "CDEK 快递单号或 SN 序列号",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+]
+
 TOOL_HANDLERS = {
     "get_inventory": tool_get_inventory,
     "get_daily_report": tool_get_daily_report,
+    "search_sn": tool_search_sn,
+    "check_repair": tool_check_repair,
 }
