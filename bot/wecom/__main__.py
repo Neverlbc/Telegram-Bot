@@ -69,6 +69,7 @@ async def main_async() -> None:
             file_info = body.get(msgtype, {}) or body.get("file", {}) or body.get("attachment", {})
             file_id = file_info.get("fileid") or file_info.get("media_id") or ""
             file_name = file_info.get("filename") or file_info.get("name") or ""
+            # 兼容企微将 docx 作为 file 或 docmsg 等类型发送
             if file_id and (file_name.endswith(".txt") or "=" in file_name or file_name.endswith(".docx") or file_name.endswith(".doc")):
                 if client is not None:
                     try:
@@ -88,10 +89,24 @@ async def main_async() -> None:
                     except Exception as e:
                         logger.error("下载/解析附件失败: %s", e)
         elif msgtype in ["doc", "docmsg", "link", "markdown"]:
-            # 如果长文被自动转成企微在线文档 / 收集表 / 链接
-            if client is not None:
-                await client.reply_text(frame, "⚠️ 检测到你发送了在线文档或链接。\n\n由于企微权限限制，机器人**无法直接读取在线文档**的内容。\n👉 **更新Cookie的正确姿势**：\n在电脑桌面新建一个正常的「记事本(TXT)文件」或直接发「Word(.docx)文档」，把内容粘贴进去保存，然后发进聊天框！")
-            return
+            file_info = body.get(msgtype, {})
+            # 企微在线文档也是 docmsg，但某些情况它也是带 fileid 的真附件
+            file_name = file_info.get("title") or file_info.get("doc_title") or ""
+            if file_name.endswith(".docx") and file_info.get("fileid"):
+                if client is not None:
+                    try:
+                        content_bytes = await client.download_media(file_info.get("fileid"))
+                        import io
+                        import docx
+                        doc_obj = docx.Document(io.BytesIO(content_bytes))
+                        text = "\n".join([p.text for p in doc_obj.paragraphs]).strip()
+                        logger.info("[wecom] 已从docmsg中将docx附件转换为文本，长度=%d", len(text))
+                    except Exception as e:
+                        logger.error("下载/解析docmsg附件失败: %s", e)
+            else:
+                if client is not None:
+                    await client.reply_text(frame, "⚠️ 检测到你发送了在线文档或链接。\n\n由于企微权限限制，机器人**无法直接读取在线文档**的内容。\n👉 **更新Cookie的正确姿势**：\n在电脑桌面新建一个正常的「记事本(TXT)文件」或直接发「Word(.docx)文档」，把内容粘贴进去保存，然后发进聊天框！")
+                return
         else:
             return  # 忽略语音、图片等不可读消息
 
