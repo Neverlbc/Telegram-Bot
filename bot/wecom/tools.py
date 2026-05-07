@@ -189,6 +189,25 @@ async def tool_get_daily_report(period_days: int = 1) -> str:
 
 
 
+async def tool_list_ae_stores() -> str:
+    """列出数据库中已绑定 Cookie 的速卖通店铺名称列表。"""
+    from sqlalchemy import select as sa_select
+    from bot.models.ae_store_cookie import AEStoreCookie
+    try:
+        async with async_session() as session:
+            rows = (await session.execute(
+                sa_select(AEStoreCookie.store_name)
+                .where(AEStoreCookie.cookie != "")
+                .order_by(AEStoreCookie.store_name)
+            )).scalars().all()
+        if not rows:
+            return "当前没有已绑定 Cookie 的速卖通店铺。"
+        return "已绑定的速卖通店铺：\n" + "\n".join(f"• {name}" for name in rows)
+    except Exception as exc:
+        logger.exception("tool_list_ae_stores failed")
+        return f"❌ 获取店铺列表失败：{exc}"
+
+
 async def tool_create_ae_promo_code(
     store_name: str,
     discount_value: float,
@@ -676,8 +695,16 @@ TOOL_SCHEMAS += [
     {
         "type": "function",
         "function": {
+            "name": "list_ae_stores",
+            "description": "查询数据库中已绑定 Cookie 的速卖通店铺列表。当用户要创建折扣码但未指定店铺名称时，先调用此工具获取可用店铺列表，再询问用户选哪家。",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "create_ae_promo_code",
-            "description": "为指定的速卖通（AliExpress）店铺创建买家直接可用的 Promo Code（折扣码）。只能且必须针对特定的【店铺名】（如：主店、配件店），折扣码会自动生成12位随机字母数字，生效时间约为创建指令完成后1小时之内。",
+            "description": "为指定的速卖通（AliExpress）店铺创建折扣码。店铺名称必须与数据库中已绑定的店铺完全一致（可先调用 list_ae_stores 获取列表）。折扣码自动生成12位随机字母数字，生效约需1小时。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -720,5 +747,6 @@ TOOL_HANDLERS = {
     "get_user_ranking": tool_get_user_ranking,
     "search_sn": tool_search_sn,
     "check_repair": tool_check_repair,
+    "list_ae_stores": tool_list_ae_stores,
     "create_ae_promo_code": tool_create_ae_promo_code,
 }
