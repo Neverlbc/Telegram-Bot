@@ -659,7 +659,7 @@ TOOL_SCHEMAS += [
     {
         "type": "function",
         "function": {
-            "name": "tool_create_ae_promo_code",
+            "name": "create_ae_promo_code",
             "description": "为指定的速卖通（AliExpress）店铺创建买家直接可用的 Promo Code（折扣码）。只能且必须针对特定的【店铺名】（如：主店、配件店），折扣码会自动生成12位随机字母数字，生效时间约为创建指令完成后1小时之内。",
             "parameters": {
                 "type": "object",
@@ -704,5 +704,5 @@ TOOL_HANDLERS = {
     "get_user_ranking": tool_get_user_ranking,
     "search_sn": tool_search_sn,
     "check_repair": tool_check_repair,
-    "tool_create_ae_promo_code": tool_create_ae_promo_code,
+    "create_ae_promo_code": tool_create_ae_promo_code,
 }
