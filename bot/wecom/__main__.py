@@ -59,13 +59,52 @@ async def main_async() -> None:
         body = frame.get("body") or {}
         chat_type = body.get("chattype", "single")
         sender = (body.get("from") or {}).get("userid", "")
-        text = _extract_user_text(frame)
+        
+        # 特殊处理：如果用户发的是 txt 文件（长文本超限被企微转为文件）
+        msgtype = body.get("msgtype")
+        text = ""
+        if msgtype == "text":
+            text = _extract_user_text(frame)
+        elif msgtype == "attachment" or msgtype == "file":
+            file_info = body.get(msgtype, {}) or body.get("file", {}) or body.get("attachment", {})
+            file_id = file_info.get("fileid") or file_info.get("media_id") or ""
+            file_name = file_info.get("filename") or file_info.get("name") or ""
+            if file_id and (file_name.endswith(".txt") or "=" in file_name):
+                if client is not None:
+                    try:
+                        content_bytes = await client.download_media(file_id)
+                        text = content_bytes.decode('utf-8', errors='ignore').strip()
+                        logger.info("[wecom] 已将txt附件转换为文本，长度=%d", len(text))
+                    except Exception as e:
+                        logger.error("下载/解析附件失败: %s", e)
+        elif msgtype in ["doc", "docmsg", "link", "markdown"]:
+            # 如果长文被自动转成企微在线文档 / 收集表 / 链接
+            if client is not None:
+                await client.reply_text(frame, "⚠️ 检测到你发送了在线文档或链接。\n\n由于企微权限限制，机器人**无法直接读取在线文档**的内容。\n👉 **更新Cookie的正确姿势**：\n在电脑桌面新建一个正常的「记事本(TXT)文件」，把内容粘贴进去保存，然后把 **.txt 文件** 发进聊天框！")
+            return
+        else:
+            return  # 忽略语音、图片等不可读消息
 
-        logger.info("[wecom] msg from=%s chat=%s text=%r", sender, chat_type, text[:80])
+        logger.info("[wecom] msg from=%s chat=%s msgtype=%s text_len=%d", sender, chat_type, msgtype, len(text))
         if not text:
-            return  # 非文本消息忽略
+            return
 
         if client is None:
+            return
+
+        # --- 第一层直接指令拦截：手动更新 Cookie ---
+        if text.startswith("/update_cookie"):
+            parts = text.split(maxsplit=2)
+            store_name = parts[1] if len(parts) > 1 else ""
+            cookie_str = parts[2] if len(parts) > 2 else ""
+            
+            if not store_name or not cookie_str:
+                await client.reply_text(frame, "❌ 格式错误。正确格式(可在消息内直接发或分开发):\n`/update_cookie [店铺名] [你的超长Cookie]`\n\n> 💡贴士：如果在电脑复制Cookie太长变成了txt文件发送，你可以在txt文件的第一行写上 `/update_cookie 主店`，换行后再粘贴cookie发送！")
+                return
+            
+            from bot.services.aliexpress_mtop import save_cookie
+            save_cookie(store_name, cookie_str)
+            await client.reply_text(frame, f"✅ 已成功更新并保存【{store_name}】的授权 Cookie！快试试让 AI 帮你创建折扣码吧。")
             return
 
         # 立即发占位帧（finish=False），让用户看到"处理中"而非空白等待

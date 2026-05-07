@@ -65,6 +65,7 @@ class WecomBotClient:
         self.on_event = on_event
         self.ws: Any = None
         self._closing = False
+        self.pending_downloads: dict[str, dict[str, Any]] = {}
 
     async def run_forever(self) -> None:
         delay = RECONNECT_BASE_DELAY
@@ -166,6 +167,22 @@ class WecomBotClient:
                 logger.warning("[wecom-ws] %s 错误 code=%s msg=%s", cmd, err_code, err_msg)
             else:
                 logger.info("[wecom-ws] %s body=%s", cmd, body)
+        elif cmd == "aibot_download_media_data":
+            # 处理文件下载数据帧
+            import base64
+            file_id = body.get("fileid")
+            if file_id in self.pending_downloads:
+                data_b64 = body.get("data", "")
+                is_finish = body.get("is_finish", False) or body.get("is_finsh", False)
+                try:
+                    self.pending_downloads[file_id]["buffer"].extend(base64.b64decode(data_b64))
+                except Exception as e:
+                    logger.error("Base64 decode failed for file_id %s: %s", file_id, e)
+                
+                if is_finish:
+                    fut = self.pending_downloads[file_id].get("future")
+                    if fut and not fut.done():
+                        fut.set_result(self.pending_downloads[file_id]["buffer"])
         else:
             logger.info("[wecom-ws] 未知 cmd=%s body=%s", cmd, body)
 
@@ -173,6 +190,26 @@ class WecomBotClient:
         if self.ws is None:
             raise RuntimeError("WebSocket 未连接")
         await self.ws.send(json.dumps(frame, ensure_ascii=False))
+
+    async def download_media(self, file_id: str, timeout: int = 15) -> bytes:
+        """通过 WebSocket 获取企微媒体文件内容(如发送的 txt 附件)。"""
+        if file_id in self.pending_downloads:
+            raise RuntimeError(f"Already downloading file {file_id}")
+            
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        self.pending_downloads[file_id] = {"buffer": bytearray(), "future": future}
+        
+        try:
+            await self._send({
+                "cmd": "aibot_download_media",
+                "headers": {"req_id": _gen_req_id("dl")},
+                "body": {"fileid": file_id}
+            })
+            result = await asyncio.wait_for(future, timeout=timeout)
+            return bytes(result)
+        finally:
+            self.pending_downloads.pop(file_id, None)
 
     def new_stream_id(self) -> str:
         return _gen_req_id("stream")

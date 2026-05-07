@@ -188,6 +188,69 @@ async def tool_get_daily_report(period_days: int = 1) -> str:
     return "\n".join(lines).rstrip()
 
 
+
+async def tool_create_ae_promo_code(
+    store_name: str,
+    discount_value: float,
+    min_order_amount: float,
+    validity_days: int,
+    total_num: int,
+    num_per_buyer: int,
+    campaign_name: str = "WeCom Auto Promo",
+    promo_code: str = None
+) -> str:
+    """为速卖通指定店铺创建折扣码 (Promo Code)。
+    
+    Args:
+        store_name: 店铺名称 (必须是中文，建议如 "主店", "配件店" 等，作为提取cookie的key)
+        discount_value: 折扣减免的金额 (固定减多少美元)
+        min_order_amount: 需要满多少美元才减 (满减门槛)
+        validity_days: 有效期天数
+        total_num: 发行的代码总数
+        num_per_buyer: 每人限购数量
+        campaign_name: 在后台显示的活动名称
+        promo_code: 若为空，将自动生成 12 位专属码
+    """
+    import random
+    import string
+    import time
+    from bot.services.aliexpress_mtop import MTOPClient
+    
+    if not promo_code:
+        promo_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+        
+    client = MTOPClient(store_name)
+    
+    now_ms = int(time.time() * 1000)
+    end_ms = now_ms + (validity_days * 24 * 60 * 60 * 1000)
+    
+    api = "mtop.global.merchant.promotion.ae.voucher.save"
+    data = {
+        "channelId": "238299", "codeScope": "public", "promotionName": campaign_name,
+        "autoRenew": True, "canApplyBefore": False, "hasUseCondition": "1",
+        "denominationNew": discount_value, "releasedNum": total_num, "numPerBuyer": num_per_buyer,
+        "countryScope": "all_country", "productScope": "entire_shop",
+        "couponCode": promo_code, "minOrderAmountNew": min_order_amount,
+        "couponChannelType": "0", "consumeStartTime": now_ms, "consumeEndTime": end_ms,
+        "applyStartTime": None, "memberLevel": "A0", "displayChannel": "[]",
+        "shipToCountryCodes": "", "fromAgent": False, "updateAutoRenewFlag": True
+    }
+    
+    try:
+        res = await client.request(api, data)
+        ret_msg = str(res.get("ret", [""])[0])
+        if "SUCCESS" in ret_msg:
+            return f"✅ 成功在【{store_name}】发码！\n\n🏷️ 折扣代码: `{promo_code}`\n💰 规则: 满 ${min_order_amount} 减 ${discount_value}\n🎟️ 发放数量: {total_num} 张 (每人限用 {num_per_buyer} 张)\n⏳ 有效期: 约 {validity_days} 天"
+        else:
+            return f"⚠️ 在【{store_name}】发码失败：{res.get('ret')}"
+    except ValueError as e:
+        if str(e) == "SESSION_EXPIRED":
+            return f"❌ {store_name} 的授权已彻底失效，未能创建折扣码。\n\n请老板在浏览器重新登录该店铺抓取 Cookie 后，发送以下格式重新绑定授权：\n`/update_cookie {store_name} 你的新Cookie`"
+        return f"❌ 发码内部发生错误：{e}"
+    except Exception as e:
+        return f"❌ 发码发生异常错误：{e}"
+
+
 _PRICE_LABELS: dict[str, str] = {
     "rub": "卢布",
     "cny": "人民币",
@@ -592,6 +655,46 @@ TOOL_SCHEMAS += [
     },
 ]
 
+TOOL_SCHEMAS += [
+    {
+        "type": "function",
+        "function": {
+            "name": "tool_create_ae_promo_code",
+            "description": "为指定的速卖通（AliExpress）店铺创建买家直接可用的 Promo Code（折扣码）。只能且必须针对特定的【店铺名】（如：主店、配件店），折扣码会自动生成12位随机字母数字，生效时间约为创建指令完成后1小时之内。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "store_name": {
+                        "type": "string",
+                        "description": "速卖通店铺名称或别名（如：主店、配件店、三店等），必须指定。"
+                    },
+                    "discount_value": {
+                        "type": "number",
+                        "description": "立减金额，默认货币为美元（USD），如 5.0"
+                    },
+                    "min_order_amount": {
+                        "type": "number",
+                        "description": "满减条件门槛金额（如果为空，请求用户补充）。"
+                    },
+                    "validity_days": {
+                        "type": "integer",
+                        "description": "折扣的有效期天数。如果用户没有提供，务必通过对话反问获取。"
+                    },
+                    "total_num": {
+                        "type": "integer",
+                        "description": "总共发放的名额张数。如果用户没有提供，务必通过对话反问获取。"
+                    },
+                    "num_per_buyer": {
+                        "type": "integer",
+                        "description": "每人限领限用几张。如果未提供，务必通过对话反问获取。"
+                    }
+                },
+                "required": ["store_name", "discount_value", "min_order_amount", "validity_days", "total_num", "num_per_buyer"]
+            }
+        }
+    }
+]
+
 TOOL_HANDLERS = {
     "get_inventory": tool_get_inventory,
     "get_daily_report": tool_get_daily_report,
@@ -600,4 +703,5 @@ TOOL_HANDLERS = {
     "get_user_ranking": tool_get_user_ranking,
     "search_sn": tool_search_sn,
     "check_repair": tool_check_repair,
+    "tool_create_ae_promo_code": tool_create_ae_promo_code,
 }
