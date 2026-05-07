@@ -226,12 +226,12 @@ async def tool_create_ae_promo_code(
     
     api = "mtop.global.merchant.promotion.ae.voucher.save"
     data = {
-        "channelId": "238299", "codeScope": "private", "promotionName": campaign_name,
+        "channelId": "238299", "codeScope": "public", "promotionName": campaign_name,
         "autoRenew": True, "canApplyBefore": False, "hasUseCondition": "1",
         "denominationNew": discount_value, "releasedNum": total_num, "numPerBuyer": num_per_buyer,
         "countryScope": "all_country", "productScope": "entire_shop",
         "couponCode": promo_code, "minOrderAmountNew": min_order_amount,
-        "couponChannelType": "0", "consumeStartTime": now_ms, "consumeEndTime": end_ms,
+        "couponChannelType": "1", "consumeStartTime": now_ms, "consumeEndTime": end_ms,
         "applyStartTime": None, "memberLevel": "A0", "displayChannel": "[]",
         "shipToCountryCodes": "", "fromAgent": False, "updateAutoRenewFlag": True
     }
