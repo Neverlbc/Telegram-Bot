@@ -704,7 +704,7 @@ TOOL_SCHEMAS += [
         "type": "function",
         "function": {
             "name": "create_ae_promo_code",
-            "description": "为指定的速卖通（AliExpress）店铺创建折扣码。店铺名称必须与数据库中已绑定的店铺完全一致（可先调用 list_ae_stores 获取列表）。折扣码自动生成12位随机字母数字，生效约需1小时。",
+            "description": "为指定的速卖通（AliExpress）店铺创建折扣码。店铺名称必须与数据库中已绑定的店铺完全一致（可先调用 list_ae_stores 获取列表）。折扣码自动生成12位随机字母数字，通常 5-15 分钟内生效。",
             "parameters": {
                 "type": "object",
                 "properties": {
