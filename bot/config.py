@@ -154,6 +154,10 @@ class Settings(BaseSettings):
         description="测试账号 Telegram 数字 ID 列表，逗号分隔；用于无 username 或 username 解析不到的账号",
     )
 
+    # ── AliExpress Cookie 管理后台 ───────────────────
+    ae_cookie_dashboard_port: int = Field(8089, description="AE Cookie 管理后台 HTTP 端口")
+    ae_cookie_dashboard_token: str = Field("", description="AE Cookie 管理后台访问 Token（为空则不鉴权）")
+
     # ── 企业微信智能机器人 (WeCom AI Bot, 长连接) ─────
     wecom_bot_id: str = Field("", description="企业微信智能机器人 BotID（管理后台 → 智能机器人）")
     wecom_bot_secret: str = Field("", description="企业微信智能机器人长连接专用 Secret")
