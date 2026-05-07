@@ -17,6 +17,7 @@ python-dotenv>=1.0.0
 
 # API Requests (MTOP)
 httpx
+python-docx
 
 # Google Sheets 写入
 gspread>=6.0.0

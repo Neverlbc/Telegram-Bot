@@ -69,18 +69,28 @@ async def main_async() -> None:
             file_info = body.get(msgtype, {}) or body.get("file", {}) or body.get("attachment", {})
             file_id = file_info.get("fileid") or file_info.get("media_id") or ""
             file_name = file_info.get("filename") or file_info.get("name") or ""
-            if file_id and (file_name.endswith(".txt") or "=" in file_name):
+            if file_id and (file_name.endswith(".txt") or "=" in file_name or file_name.endswith(".docx") or file_name.endswith(".doc")):
                 if client is not None:
                     try:
                         content_bytes = await client.download_media(file_id)
-                        text = content_bytes.decode('utf-8', errors='ignore').strip()
-                        logger.info("[wecom] 已将txt附件转换为文本，长度=%d", len(text))
+                        if file_name.endswith(".docx"):
+                            import io
+                            import docx
+                            doc_obj = docx.Document(io.BytesIO(content_bytes))
+                            text = "\n".join([p.text for p in doc_obj.paragraphs]).strip()
+                            logger.info("[wecom] 已将docx附件转换为文本，长度=%d", len(text))
+                        elif file_name.endswith(".doc"):
+                            await client.reply_text(frame, "⚠️ 抱歉，我不支持老版本的 .doc 格式文件。\n请将文件**另存为 .docx** 或 **.txt** 格式后再发给我！")
+                            return
+                        else:
+                            text = content_bytes.decode('utf-8', errors='ignore').strip()
+                            logger.info("[wecom] 已将txt附件转换为文本，长度=%d", len(text))
                     except Exception as e:
                         logger.error("下载/解析附件失败: %s", e)
         elif msgtype in ["doc", "docmsg", "link", "markdown"]:
             # 如果长文被自动转成企微在线文档 / 收集表 / 链接
             if client is not None:
-                await client.reply_text(frame, "⚠️ 检测到你发送了在线文档或链接。\n\n由于企微权限限制，机器人**无法直接读取在线文档**的内容。\n👉 **更新Cookie的正确姿势**：\n在电脑桌面新建一个正常的「记事本(TXT)文件」，把内容粘贴进去保存，然后把 **.txt 文件** 发进聊天框！")
+                await client.reply_text(frame, "⚠️ 检测到你发送了在线文档或链接。\n\n由于企微权限限制，机器人**无法直接读取在线文档**的内容。\n👉 **更新Cookie的正确姿势**：\n在电脑桌面新建一个正常的「记事本(TXT)文件」或直接发「Word(.docx)文档」，把内容粘贴进去保存，然后发进聊天框！")
             return
         else:
             return  # 忽略语音、图片等不可读消息
@@ -99,7 +109,7 @@ async def main_async() -> None:
             cookie_str = parts[2] if len(parts) > 2 else ""
             
             if not store_name or not cookie_str:
-                await client.reply_text(frame, "❌ 格式错误。正确格式(可在消息内直接发或分开发):\n`/update_cookie [店铺名] [你的超长Cookie]`\n\n> 💡贴士：如果在电脑复制Cookie太长变成了txt文件发送，你可以在txt文件的第一行写上 `/update_cookie 主店`，换行后再粘贴cookie发送！")
+                await client.reply_text(frame, "❌ 格式错误。正确格式(可在消息内直接发或分开发):\n`/update_cookie [店铺名] [你的超长Cookie]`\n\n> 💡贴士：如果在电脑复制Cookie太长变成文件发送，你可以在txt或Word的第一行写上 `/update_cookie 主店`，换行后再粘贴cookie发送！")
                 return
             
             from bot.services.aliexpress_mtop import save_cookie
