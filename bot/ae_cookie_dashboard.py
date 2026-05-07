@@ -62,6 +62,7 @@ async def api_list_stores(request: web.Request) -> web.Response:
         # 只展示 cookie 长度，不暴露原文
         data.append({
             "store_name": row.store_name,
+            "channel_id": row.channel_id or "238299",
             "has_cookie": bool(cookie),
             "has_tk": has_tk,
             "cookie_len": len(cookie),
@@ -81,6 +82,7 @@ async def api_upsert_store(request: web.Request) -> web.Response:
 
     store_name = (body.get("store_name") or "").strip()
     cookie = (body.get("cookie") or "").strip()
+    channel_id = (body.get("channel_id") or "238299").strip()
     if not store_name:
         raise web.HTTPBadRequest(text="store_name is required")
     if not cookie:
@@ -92,13 +94,14 @@ async def api_upsert_store(request: web.Request) -> web.Response:
         )
         if row:
             row.cookie = cookie
+            row.channel_id = channel_id
             action = "updated"
         else:
-            session.add(AEStoreCookie(store_name=store_name, cookie=cookie))
+            session.add(AEStoreCookie(store_name=store_name, cookie=cookie, channel_id=channel_id))
             action = "created"
         await session.commit()
 
-    logger.info("[ae-cookie-dash] %s store=%s cookie_len=%d", action, store_name, len(cookie))
+    logger.info("[ae-cookie-dash] %s store=%s channel_id=%s cookie_len=%d", action, store_name, channel_id, len(cookie))
     return web.json_response({"ok": True, "action": action, "store_name": store_name})
 
 
@@ -193,6 +196,10 @@ def _html(token: str) -> str:
         <label>店铺名称</label>
         <input type="text" id="storeName" placeholder="如 botterrun">
       </div>
+      <div style="flex:0 0 140px">
+        <label>Channel ID</label>
+        <input type="text" id="channelId" placeholder="如 238299">
+      </div>
       <div class="field-cookie">
         <label>Cookie（完整字符串）</label>
         <input type="text" id="cookieVal" placeholder="cna=xxx; _m_h5_tk=xxx; ...">
@@ -209,6 +216,7 @@ def _html(token: str) -> str:
       <thead>
         <tr>
           <th>店铺名称</th>
+          <th>Channel ID</th>
           <th>Cookie 状态</th>
           <th>_m_h5_tk</th>
           <th>Cookie 长度</th>
@@ -240,12 +248,13 @@ async function loadStores() {{
     const tbody = document.getElementById('storeBody');
     tbody.innerHTML = '';
     if (!data.length) {{
-      tbody.innerHTML = '<tr><td colspan="6" style="color:#9aa0a6;text-align:center">暂无数据</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="color:#9aa0a6;text-align:center">暂无数据</td></tr>';
     }} else {{
       data.forEach(s => {{
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>${{s.store_name}}</strong></td>
+          <td><span class="tag tag-info">${{s.channel_id || '—'}}</span></td>
           <td>${{s.has_cookie
             ? '<span class="tag tag-ok">✓ 已绑定</span>'
             : '<span class="tag tag-warn">✗ 未绑定</span>'}}</td>
@@ -269,18 +278,20 @@ async function loadStores() {{
 
 async function upsertStore() {{
   const name = document.getElementById('storeName').value.trim();
+  const channel_id = document.getElementById('channelId').value.trim() || '238299';
   const cookie = document.getElementById('cookieVal').value.trim();
   if (!name || !cookie) {{ showMsg('formMsg', '店铺名称和 Cookie 不能为空', false); return; }}
   try {{
     const r = await fetch('/api/stores' + qs, {{
       method: 'POST',
       headers: {{'Content-Type': 'application/json'}},
-      body: JSON.stringify({{store_name: name, cookie}})
+      body: JSON.stringify({{store_name: name, channel_id, cookie}})
     }});
     const data = await r.json();
     if (data.ok) {{
       showMsg('formMsg', `✅ 已${{data.action === 'created' ? '新增' : '更新'}}店铺：${{name}}`, true);
       document.getElementById('storeName').value = '';
+      document.getElementById('channelId').value = '';
       document.getElementById('cookieVal').value = '';
       loadStores();
     }} else {{
