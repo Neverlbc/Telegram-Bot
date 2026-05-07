@@ -35,9 +35,11 @@ async def main_async() -> None:
         return
 
     client: WecomBotClient | None = None
+    # 每个用户正在处理的 task 数，超过 1 条则丢弃后续消息，避免并发堆积
+    _user_active: dict[str, int] = {}
 
     async def _handle_message_async(
-        frame: dict[str, Any], text: str, stream_id: str
+        frame: dict[str, Any], text: str, stream_id: str, sender: str
     ) -> None:
         """LLM 处理 + 回复，独立 task 跑，不阻塞 WebSocket 主循环."""
         logger.info("[wecom] LLM 开始处理: %r", text[:80])
@@ -47,10 +49,11 @@ async def main_async() -> None:
         except Exception as exc:
             logger.exception("LLM dispatch failed")
             reply = f"❌ 处理消息时出错：{exc}"
+        finally:
+            _user_active[sender] = max(0, _user_active.get(sender, 1) - 1)
 
         if client is not None:
             try:
-                # 同一 stream_id + finish=True，企业微信客户端用最终内容替换占位文字
                 await client.reply_text(frame, reply, stream_id=stream_id)
             except Exception:
                 logger.exception("回复消息失败")
@@ -132,6 +135,13 @@ async def main_async() -> None:
             await client.reply_text(frame, f"✅ 已成功更新并保存【{store_name}】的授权 Cookie！快试试让 AI 帮你创建折扣码吧。")
             return
 
+        # 同一用户正在处理中则忽略新消息，防止并发堆积
+        if _user_active.get(sender, 0) >= 1:
+            logger.info("[wecom] 忽略并发消息 sender=%s text=%r", sender, text[:40])
+            return
+
+        _user_active[sender] = _user_active.get(sender, 0) + 1
+
         # 立即发占位帧（finish=False），让用户看到"处理中"而非空白等待
         stream_id = client.new_stream_id()
         try:
@@ -140,7 +150,7 @@ async def main_async() -> None:
             logger.exception("发送占位帧失败")
 
         # LLM + 最终回复放后台，不阻塞 WS 主循环
-        asyncio.create_task(_handle_message_async(frame, text, stream_id))
+        asyncio.create_task(_handle_message_async(frame, text, stream_id, sender))
 
     async def on_event(frame: dict[str, Any]) -> None:
         body = frame.get("body") or {}
