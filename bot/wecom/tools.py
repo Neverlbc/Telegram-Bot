@@ -666,7 +666,8 @@ TOOL_SCHEMAS += [
                 "properties": {
                     "store_name": {
                         "type": "string",
-                        "description": "速卖通店铺名称或别名（如：主店、配件店、三店等），必须指定。"
+                        "enum": ["botterrun", "华建热像仪", "锦柏测绘店", "益丰仪表店", "不凡专营店", "不凡新店", "仪华电动工具", "优利德智测专卖店", "ABF旗舰店", "仪达家居专营店", "仪达专营老店", "智测家居新店", "智测专营老店", "A-BFastrion旗舰店"],
+                        "description": "速卖通店铺名称，必须从用户话语中提取出最匹配的店铺。必须从列表中进行选择。"
                     },
                     "discount_value": {
                         "type": "number",
