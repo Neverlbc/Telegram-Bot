@@ -196,7 +196,7 @@ async def tool_create_ae_promo_code(
     validity_days: int,
     total_num: int,
     num_per_buyer: int,
-    campaign_name: str = "WeCom Auto Promo",
+    campaign_name: str = "跨境机器人创建",
     promo_code: str = None
 ) -> str:
     """为速卖通指定店铺创建折扣码 (Promo Code)。
