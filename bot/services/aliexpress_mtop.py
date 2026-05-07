@@ -13,13 +13,23 @@ from bot.models.ae_store_cookie import AEStoreCookie
 logger = logging.getLogger(__name__)
 
 
-async def load_cookie(store_name: str) -> str:
-    """从数据库读取指定店铺的 Cookie。"""
+DEFAULT_CHANNEL_ID = "238299"
+
+
+async def load_store(store_name: str) -> tuple[str, str]:
+    """从数据库读取店铺的 (cookie, channel_id)。"""
     async with async_session() as session:
         row = await session.scalar(
             select(AEStoreCookie).where(AEStoreCookie.store_name == store_name)
         )
-        return row.cookie if row else ""
+        if row:
+            return row.cookie, (row.channel_id or DEFAULT_CHANNEL_ID)
+        return "", DEFAULT_CHANNEL_ID
+
+
+async def load_cookie(store_name: str) -> str:
+    cookie, _ = await load_store(store_name)
+    return cookie
 
 
 async def save_cookie(store_name: str, cookie_str: str) -> None:
@@ -36,20 +46,33 @@ async def save_cookie(store_name: str, cookie_str: str) -> None:
     logger.info("[ae-mtop] Cookie 已保存到数据库 store=%s", store_name)
 
 
+async def save_channel_id(store_name: str, channel_id: str) -> None:
+    """更新店铺的 channel_id。"""
+    async with async_session() as session:
+        row = await session.scalar(
+            select(AEStoreCookie).where(AEStoreCookie.store_name == store_name)
+        )
+        if row:
+            row.channel_id = channel_id
+            await session.commit()
+            logger.info("[ae-mtop] channel_id 已更新 store=%s channel_id=%s", store_name, channel_id)
+
+
 class MTOPClient:
     """速卖通网页端 MTOP / H5API 客户端，多店铺版本。"""
 
-    def __init__(self, store_name: str, cookie_str: str) -> None:
+    def __init__(self, store_name: str, cookie_str: str, channel_id: str = DEFAULT_CHANNEL_ID) -> None:
         self.store_name = store_name
         self.cookie_str = cookie_str
+        self.channel_id = channel_id
         self.app_key = "30267743"
         self.gateway = "https://seller-acs.aliexpress.com/h5/{api}/1.0/"
 
     @classmethod
     async def create(cls, store_name: str) -> "MTOPClient":
-        """异步工厂方法：从数据库加载 Cookie 后创建实例。"""
-        cookie_str = await load_cookie(store_name)
-        return cls(store_name, cookie_str)
+        """异步工厂方法：从数据库加载 Cookie + channel_id 后创建实例。"""
+        cookie_str, channel_id = await load_store(store_name)
+        return cls(store_name, cookie_str, channel_id)
 
     def _get_tk(self) -> str:
         for item in self.cookie_str.split(";"):
@@ -101,7 +124,7 @@ class MTOPClient:
         params = {
             "jsv": "2.7.5", "appKey": self.app_key, "t": t, "sign": sign,
             "type": "originaljson", "api": api, "v": "1.0", "dataType": "json",
-            "__channel-id__": "238299",
+            "__channel-id__": self.channel_id,
         }
         payload = {"data": data_str}
         headers = {

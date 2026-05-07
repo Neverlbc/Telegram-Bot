@@ -17,3 +17,4 @@ class AEStoreCookie(TimestampMixin, Base):
         Text, unique=True, nullable=False, index=True
     )
     cookie: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    channel_id: Mapped[str] = mapped_column(Text, nullable=False, default="238299")

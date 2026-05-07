@@ -220,13 +220,20 @@ async def tool_create_ae_promo_code(
         promo_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
 
     client = await MTOPClient.create(store_name)
-    
+    if not client.cookie_str:
+        return (
+            f"❌ 店铺「{store_name}」尚未绑定授权 Cookie，无法发码。\n\n"
+            "请先登录该店铺的速卖通账号，抓取 Cookie 后通过以下方式绑定：\n"
+            f"• 企微发：`/update_cookie {store_name} 你的Cookie`\n"
+            "• 或打开 Cookie 管理后台（8089端口）直接粘贴"
+        )
+
     now_ms = int(time.time() * 1000)
     end_ms = now_ms + (validity_days * 24 * 60 * 60 * 1000)
     
     api = "mtop.global.merchant.promotion.ae.voucher.save"
     data = {
-        "channelId": "238299", "codeScope": "public", "promotionName": campaign_name,
+        "channelId": client.channel_id, "codeScope": "public", "promotionName": campaign_name,
         "autoRenew": True, "canApplyBefore": False, "hasUseCondition": "1",
         "denominationNew": discount_value, "releasedNum": total_num, "numPerBuyer": num_per_buyer,
         "countryScope": "all_country", "productScope": "entire_shop",
@@ -235,17 +242,27 @@ async def tool_create_ae_promo_code(
         "applyStartTime": None, "memberLevel": "A0", "displayChannel": "[]",
         "shipToCountryCodes": "", "fromAgent": False, "updateAutoRenewFlag": True
     }
-    
+
     try:
         res = await client.request(api, data)
         ret_msg = str(res.get("ret", [""])[0])
+        logger.info("[ae-promo] store=%s ret=%s", store_name, ret_msg)
         if "SUCCESS" in ret_msg:
-            return f"✅ 成功在【{store_name}】发码！\n\n🏷️ 折扣代码: `{promo_code}`\n💰 规则: 满 ${min_order_amount} 减 ${discount_value}\n🎟️ 发放数量: {total_num} 张 (每人限用 {num_per_buyer} 张)\n⏳ 有效期: 约 {validity_days} 天"
-        else:
-            return f"⚠️ 在【{store_name}】发码失败：{res.get('ret')}"
+            return (
+                f"✅ 成功在【{store_name}】发码！\n\n"
+                f"🏷️ 折扣代码: `{promo_code}`\n"
+                f"💰 规则: 满 ${min_order_amount} 减 ${discount_value}\n"
+                f"🎟️ 发放数量: {total_num} 张 (每人限用 {num_per_buyer} 张)\n"
+                f"⏳ 有效期: 约 {validity_days} 天"
+            )
+        return f"⚠️ 在【{store_name}】发码失败：{ret_msg}"
     except ValueError as e:
         if str(e) == "SESSION_EXPIRED":
-            return f"❌ {store_name} 的授权已彻底失效，未能创建折扣码。\n\n请老板在浏览器重新登录该店铺抓取 Cookie 后，发送以下格式重新绑定授权：\n`/update_cookie {store_name} 你的新Cookie`"
+            return (
+                f"❌ {store_name} 的授权已失效，未能创建折扣码。\n\n"
+                f"请在浏览器重新登录该店铺，抓取 Cookie 后重新绑定：\n"
+                f"`/update_cookie {store_name} 你的新Cookie`"
+            )
         return f"❌ 发码内部发生错误：{e}"
     except Exception as e:
         return f"❌ 发码发生异常错误：{e}"
