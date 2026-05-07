@@ -128,7 +128,7 @@ async def main_async() -> None:
                 return
             
             from bot.services.aliexpress_mtop import save_cookie
-            save_cookie(store_name, cookie_str)
+            await save_cookie(store_name, cookie_str)
             await client.reply_text(frame, f"✅ 已成功更新并保存【{store_name}】的授权 Cookie！快试试让 AI 帮你创建折扣码吧。")
             return
 

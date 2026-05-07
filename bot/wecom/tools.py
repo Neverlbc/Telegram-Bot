@@ -215,11 +215,11 @@ async def tool_create_ae_promo_code(
     import string
     import time
     from bot.services.aliexpress_mtop import MTOPClient
-    
+
     if not promo_code:
-        promo_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-        
-    client = MTOPClient(store_name)
+        promo_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
+
+    client = await MTOPClient.create(store_name)
     
     now_ms = int(time.time() * 1000)
     end_ms = now_ms + (validity_days * 24 * 60 * 60 * 1000)
