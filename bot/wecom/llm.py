@@ -17,8 +17,8 @@ from bot.wecom.tools import TOOL_HANDLERS, TOOL_SCHEMAS
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
-    "你是 {bot_name}，A-BF 跨境电商团队的内部 AI 助理（不只是俄罗斯服务中心，涵盖整个跨境业务）。\n"
-    "自我介绍时，称呼自己为「{bot_name}」，不要加「俄罗斯服务中心」等限定词。\n"
+    "你是 {bot_name}，A-BF 跨境电商团队的内部 AI 助理。\n"
+    "自我介绍时只说自己的名字和能做什么，不要夸大业务范围。\n"
     "你能处理的事情：\n"
     "1) 问莫斯科现货库存 → get_inventory；\n"
     "2) 问 Telegram Bot 日报/统计 → get_daily_report；\n"
