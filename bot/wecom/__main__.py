@@ -161,11 +161,14 @@ async def main_async() -> None:
             try:
                 await client.reply_welcome(
                     frame,
-                    f"您好，我是 {settings.wecom_bot_name}，A-BF 跨境电商团队内部助理。可以问我：\n"
-                    "  • 莫斯科现货库存\n"
-                    "  • Telegram Bot 日报 / 用户排行\n"
-                    "  • SN 验真 / 检修状态查询\n"
-                    "  • 速卖通店铺折扣码创建",
+                    f"你好！我是 **{settings.wecom_bot_name}**，跨境电商团队的内部 AI 助手。我能帮你处理以下事项：\n\n"
+                    "  📦 **查莫斯科现货库存** — 户外类 SKU 库存清单\n"
+                    "  📊 **查 Telegram Bot 日报/统计** — 用户埋点数据\n"
+                    "  🏆 **查用户活跃排行** — 谁最活跃一目了然\n"
+                    "  🔍 **SN 序列号验真** — 确认设备是否由我司供货\n"
+                    "  🔧 **查检修/维修状态** — 通过 CDEK 单号或 SN 查询\n"
+                    "  🛒 **创建速卖通店铺折扣码** — 帮你快速设置促销码\n\n"
+                    "有什么需要，直接说就行！",
                 )
             except Exception:
                 logger.exception("发送欢迎语失败")
