@@ -216,19 +216,12 @@ async def tool_create_ae_promo_code(
     total_num: int,
     num_per_buyer: int,
     campaign_name: str = "跨境机器人创建",
-    promo_code: str = None
+    promo_code: str = None,
+    product_ids: str = "",
 ) -> str:
     """为速卖通指定店铺创建折扣码 (Promo Code)。
-    
-    Args:
-        store_name: 店铺名称 (必须是中文，建议如 "主店", "配件店" 等，作为提取cookie的key)
-        discount_value: 折扣减免的金额 (固定减多少美元)
-        min_order_amount: 需要满多少美元才减 (满减门槛)
-        validity_days: 有效期天数
-        total_num: 发行的代码总数
-        num_per_buyer: 每人限购数量
-        campaign_name: 在后台显示的活动名称
-        promo_code: 若为空，将自动生成 12 位专属码
+
+    product_ids: 英文逗号分隔的产品 ID 列表；留空则适用全部产品。
     """
     import random
     import string
@@ -237,6 +230,9 @@ async def tool_create_ae_promo_code(
 
     if not promo_code:
         promo_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
+
+    pid_list = [p.strip() for p in product_ids.split(",") if p.strip()] if product_ids else []
+    product_scope = "part_product" if pid_list else "entire_shop"
 
     client = await MTOPClient.create(store_name)
     if not client.cookie_str:
@@ -249,13 +245,13 @@ async def tool_create_ae_promo_code(
 
     now_ms = int(time.time() * 1000)
     end_ms = now_ms + (validity_days * 24 * 60 * 60 * 1000)
-    
+
     api = "mtop.global.merchant.promotion.ae.voucher.save"
     data = {
         "channelId": client.channel_id, "codeScope": "public", "promotionName": campaign_name,
         "autoRenew": True, "canApplyBefore": False, "hasUseCondition": "1",
         "denominationNew": discount_value, "releasedNum": total_num, "numPerBuyer": num_per_buyer,
-        "countryScope": "all_country", "productScope": "entire_shop",
+        "countryScope": "all_country", "productScope": product_scope,
         "couponCode": promo_code, "minOrderAmountNew": min_order_amount,
         "couponChannelType": "1", "consumeStartTime": now_ms, "consumeEndTime": end_ms,
         "applyStartTime": None, "memberLevel": "A0", "displayChannel": "[]",
@@ -265,16 +261,40 @@ async def tool_create_ae_promo_code(
     try:
         res = await client.request(api, data)
         ret_msg = str(res.get("ret", [""])[0])
-        logger.info("[ae-promo] store=%s ret=%s", store_name, ret_msg)
-        if "SUCCESS" in ret_msg:
-            return (
-                f"✅ 成功在【{store_name}】发码！\n\n"
-                f"🏷️ 折扣代码: `{promo_code}`\n"
-                f"💰 规则: 满 ${min_order_amount} 减 ${discount_value}\n"
-                f"🎟️ 发放数量: {total_num} 张 (每人限用 {num_per_buyer} 张)\n"
-                f"⏳ 有效期: 约 {validity_days} 天"
-            )
-        return f"⚠️ 在【{store_name}】发码失败：{ret_msg}"
+        logger.info("[ae-promo] store=%s ret=%s product_scope=%s", store_name, ret_msg, product_scope)
+
+        if "SUCCESS" not in ret_msg:
+            return f"⚠️ 在【{store_name}】发码失败：{ret_msg}"
+
+        promo_data = res.get("data") or {}
+        promotion_id = str(promo_data.get("promotionId") or promo_data.get("id") or "")
+
+        lines = [
+            f"✅ 成功在【{store_name}】发码！",
+            "",
+            f"🏷️ 折扣代码: {promo_code}",
+            f"💰 规则: 满 ${min_order_amount} 减 ${discount_value}",
+            f"🎟️ 发放数量: {total_num} 张 (每人限用 {num_per_buyer} 张)",
+            f"⏳ 有效期: 约 {validity_days} 天",
+            f"📦 适用范围: {'全部产品' if not pid_list else f'指定产品 ({len(pid_list)} 个)'}",
+        ]
+
+        if pid_list:
+            if promotion_id:
+                bind_ok = await _bind_products_to_promo(client, promotion_id, pid_list)
+                if bind_ok:
+                    lines.append(f"✅ 已自动关联 {len(pid_list)} 个产品")
+                else:
+                    manage_url = (
+                        f"https://csp.aliexpress.com/m_apps/promotions/coupon-productList"
+                        f"?operation=copy&promotionId={promotion_id}&channelId={client.channel_id}"
+                    )
+                    lines += ["", "⚠️ 自动关联产品失败，请手动在以下页面添加产品：", manage_url]
+            else:
+                lines.append("⚠️ 未获取到促销 ID，无法自动关联产品，请在后台手动绑定。")
+
+        return "\n".join(lines)
+
     except ValueError as e:
         if str(e) == "SESSION_EXPIRED":
             return (
@@ -285,6 +305,21 @@ async def tool_create_ae_promo_code(
         return f"❌ 发码内部发生错误：{e}"
     except Exception as e:
         return f"❌ 发码发生异常错误：{e}"
+
+
+async def _bind_products_to_promo(client: Any, promotion_id: str, pid_list: list[str]) -> bool:
+    """尝试将产品 ID 列表绑定到已创建的促销活动。返回是否成功。"""
+    from bot.services.aliexpress_mtop import MTOPClient
+    try:
+        bind_api = "mtop.global.merchant.promotion.ae.voucher.product.save"
+        bind_data = {"promotionId": promotion_id, "productIds": pid_list}
+        res = await client.request(bind_api, bind_data)
+        ret_msg = str(res.get("ret", [""])[0])
+        logger.info("[ae-promo] bind_products promotionId=%s ret=%s", promotion_id, ret_msg)
+        return "SUCCESS" in ret_msg
+    except Exception as exc:
+        logger.warning("[ae-promo] bind_products failed: %s", exc)
+        return False
 
 
 _PRICE_LABELS: dict[str, str] = {
@@ -731,6 +766,10 @@ TOOL_SCHEMAS += [
                     "num_per_buyer": {
                         "type": "integer",
                         "description": "每人限领限用几张。如果未提供，务必通过对话反问获取。"
+                    },
+                    "product_ids": {
+                        "type": "string",
+                        "description": "适用产品 ID 列表，英文逗号分隔（如 '1234567890,9876543210'）。留空则适用全部产品。如果用户未说明是全部还是部分产品，务必询问清楚；若为部分产品，请用户提供具体产品 ID。"
                     }
                 },
                 "required": ["store_name", "discount_value", "min_order_amount", "validity_days", "total_num", "num_per_buyer"]
