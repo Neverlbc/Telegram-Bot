@@ -244,6 +244,8 @@ async def tool_create_ae_promo_code(
         )
 
     now_ms = int(time.time() * 1000)
+    # part scope 要求 consumeStartTime 至少 10 分钟后，否则 API 报错；取 10 分钟整
+    start_ms = now_ms + (10 * 60 * 1000) if pid_list else now_ms
     end_ms = now_ms + (validity_days * 24 * 60 * 60 * 1000)
 
     api = "mtop.global.merchant.promotion.ae.voucher.save"
@@ -254,7 +256,7 @@ async def tool_create_ae_promo_code(
         "countryScope": "all_country", "productScope": product_scope,
         "couponCode": promo_code, "minOrderAmountNew": min_order_amount,
         "couponChannelType": "1", "affiliateChannel": False,
-        "consumeStartTime": now_ms, "consumeEndTime": end_ms,
+        "consumeStartTime": start_ms, "consumeEndTime": end_ms,
         "applyStartTime": None, "memberLevel": "A0", "displayChannel": "[]",
         "shipToCountryCodes": "", "fromAgent": False, "updateAutoRenewFlag": True
     }
@@ -287,6 +289,7 @@ async def tool_create_ae_promo_code(
             f"🎟️ 发放数量: {total_num} 张 (每人限用 {num_per_buyer} 张)",
             f"⏳ 有效期: 约 {validity_days} 天",
             f"📦 适用范围: {'全部产品' if not pid_list else f'指定产品 ({len(pid_list)} 个)'}",
+            *([f"⏰ 约 10 分钟后生效（指定产品限制）"] if pid_list else []),
         ]
 
         if pid_list:
