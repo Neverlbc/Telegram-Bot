@@ -6,6 +6,7 @@ import asyncio
 import logging
 import re
 import signal
+import time
 from typing import Any
 
 from bot.config import settings
@@ -14,6 +15,13 @@ from bot.wecom.client import WecomBotClient
 from bot.wecom.llm import chat_with_tools
 
 logger = logging.getLogger(__name__)
+
+# 每个用户的对话历史（不含 system 消息）
+_history: dict[str, list[dict[str, Any]]] = {}
+# 每个用户最后活跃时间（秒）
+_last_active: dict[str, float] = {}
+# 无操作超过此秒数后清除历史（30 分钟）
+HISTORY_TIMEOUT_SEC = 30 * 60
 
 
 def _extract_user_text(frame: dict[str, Any]) -> str:
@@ -42,10 +50,20 @@ async def main_async() -> None:
         frame: dict[str, Any], text: str, stream_id: str, sender: str
     ) -> None:
         """LLM 处理 + 回复，独立 task 跑，不阻塞 WebSocket 主循环."""
-        logger.info("[wecom] LLM 开始处理: %r", text[:80])
+        # 超时则清除历史，开启新对话
+        now = time.time()
+        if sender in _last_active and now - _last_active[sender] > HISTORY_TIMEOUT_SEC:
+            logger.info("[wecom] 用户 %s 超时，清除对话历史", sender)
+            _history.pop(sender, None)
+        _last_active[sender] = now
+
+        history = _history.get(sender, [])
+        logger.info("[wecom] LLM 开始处理: %r history_len=%d", text[:80], len(history))
         try:
-            reply = await chat_with_tools(text)
-            logger.info("[wecom] LLM 完成 len=%d preview=%r", len(reply), reply[:80])
+            reply, updated_history = await chat_with_tools(text, history)
+            _history[sender] = updated_history
+            logger.info("[wecom] LLM 完成 len=%d history_len=%d preview=%r",
+                        len(reply), len(updated_history), reply[:80])
         except Exception as exc:
             logger.exception("LLM dispatch failed")
             reply = f"❌ 处理消息时出错：{exc}"

@@ -1,5 +1,6 @@
-"""DeepSeek tool-calling — 把用户消息丢给 LLM，让它决定调哪个工具，再回写最终回复。
+"""DeepSeek tool-calling — 把用户消息丢给 LLM，处理工具调用，返回最终回复。
 
+支持多轮对话：调用方传入 history（不含 system 消息），函数返回 (reply, updated_history)。
 最多 3 轮工具调用循环（防止死循环）。
 """
 
@@ -31,15 +32,26 @@ SYSTEM_PROMPT = (
 )
 
 MAX_TOOL_LOOPS = 3
+# 保留最近 N 条历史消息（不含 system），防止 context 过长
+MAX_HISTORY_MESSAGES = 20
 
 
-async def chat_with_tools(user_text: str) -> str:
-    """主入口：发送一条用户消息给 DeepSeek，处理工具调用，返回最终文本回复。"""
+async def chat_with_tools(
+    user_text: str,
+    history: list[dict[str, Any]] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """主入口：发送用户消息给 DeepSeek，处理工具调用，返回 (reply, updated_history)。
+
+    history: 上一轮对话留下的消息列表（不含 system），调用方负责存取。
+    """
     if not settings.deepseek_api_key:
-        return "⚠️ DeepSeek API Key 未配置，无法处理智能问答。"
+        return "⚠️ DeepSeek API Key 未配置，无法处理智能问答。", history or []
+
+    prior: list[dict[str, Any]] = list(history or [])
 
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT.format(bot_name=settings.wecom_bot_name)},
+        *prior,
         {"role": "user", "content": user_text},
     ]
 
@@ -48,30 +60,34 @@ async def chat_with_tools(user_text: str) -> str:
             response = await _call_deepseek(messages)
         except Exception as exc:
             logger.exception("DeepSeek call failed")
-            return f"❌ 调用 LLM 失败：{exc}"
+            err = f"❌ 调用 LLM 失败：{exc}"
+            return err, prior
 
         if not response:
-            return "❌ LLM 没有返回内容。"
+            return "❌ LLM 没有返回内容。", prior
 
         message = response.get("choices", [{}])[0].get("message") or {}
         tool_calls = message.get("tool_calls") or []
 
         if not tool_calls:
             content = (message.get("content") or "").strip()
-            return content or "（LLM 返回为空）"
+            reply = content or "（LLM 返回为空）"
+            # 把本轮 user + assistant 追加到历史
+            updated = _trim([
+                *prior,
+                {"role": "user", "content": user_text},
+                {"role": "assistant", "content": reply},
+            ])
+            return reply, updated
 
-        # 把 LLM 返回的整条 assistant 消息追加回去（保留 reasoning_content / tool_calls /
-        # content 等所有字段）。DeepSeek V4 思考模式下，tool-call 轮次的 reasoning_content
-        # 必须原样回传，否则 400：`The reasoning_content in the thinking mode must be
-        # passed back to the API.`
-        assistant_msg = dict(message)  # 浅拷贝，避免被后续修改
+        # 追加 assistant 消息（保留 reasoning_content / tool_calls 等所有字段）
+        assistant_msg = dict(message)
         assistant_msg.setdefault("role", "assistant")
         if assistant_msg.get("content") in (None, ""):
-            # OpenAI 规范：有 tool_calls 时 content 可为 null
             assistant_msg["content"] = None
         messages.append(assistant_msg)
 
-        # 依次执行 tool_calls，把结果追加为 role=tool 消息
+        # 依次执行 tool_calls
         for call in tool_calls:
             tool_name = call.get("function", {}).get("name", "")
             tool_args_raw = call.get("function", {}).get("arguments") or "{}"
@@ -94,7 +110,6 @@ async def chat_with_tools(user_text: str) -> str:
 
             tool_call_id = call.get("id") or call.get("tool_call_id") or ""
             if not tool_call_id:
-                # DeepSeek 必须有 tool_call_id 配对，否则 400
                 logger.warning("[wecom-llm] tool_call 缺 id，强行生成占位值")
                 tool_call_id = f"call_{tool_name}"
             messages.append({
@@ -103,9 +118,17 @@ async def chat_with_tools(user_text: str) -> str:
                 "content": str(tool_result) if tool_result else "(空)",
             })
             logger.info("[wecom-llm] tool=%s id=%s args=%s len=%d",
-                        tool_name, tool_call_id, tool_args, len(tool_result))
+                        tool_name, tool_call_id, tool_args, len(str(tool_result)))
 
-    return "❌ 工具调用循环超过上限，未能给出结论。"
+    err = "❌ 工具调用循环超过上限，未能给出结论。"
+    return err, prior
+
+
+def _trim(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """保留最近 MAX_HISTORY_MESSAGES 条消息。"""
+    if len(history) <= MAX_HISTORY_MESSAGES:
+        return history
+    return history[-MAX_HISTORY_MESSAGES:]
 
 
 async def _call_deepseek(messages: list[dict[str, Any]]) -> dict[str, Any]:
