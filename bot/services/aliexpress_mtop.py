@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CHANNEL_ID = "238299"
 
+# 产品相关 API（search/save promotiongroup）使用独立 appKey
+PRODUCT_APP_KEY = "12574478"
+
 
 async def load_store(store_name: str) -> tuple[str, str]:
     """从数据库读取店铺的 (cookie, channel_id)。"""
@@ -82,8 +85,9 @@ class MTOPClient:
                 return full_tk.split("_")[0]
         return ""
 
-    def _sign(self, token: str, t: str, data: str) -> str:
-        sign_str = f"{token}&{t}&{self.app_key}&{data}"
+    def _sign(self, token: str, t: str, data: str, app_key: str | None = None) -> str:
+        key = app_key or self.app_key
+        sign_str = f"{token}&{t}&{key}&{data}"
         return hashlib.md5(sign_str.encode("utf-8")).hexdigest()
 
     async def _update_cookie_str(self, new_cookies: httpx.Cookies) -> bool:
@@ -111,18 +115,21 @@ class MTOPClient:
             logger.info("[ae-mtop] 自动续命：_m_h5_tk 已更新 store=%s", self.store_name)
         return changed
 
-    async def request(self, api: str, data_dict: dict[str, Any]) -> dict:
+    async def request(self, api: str, data_dict: dict[str, Any], app_key: str | None = None) -> dict:
+        """发起 MTOP 请求。app_key 为空时使用实例默认 appKey（发码用 30267743），
+        产品绑定相关 API 需传入 PRODUCT_APP_KEY（12574478）。"""
         if not self.cookie_str:
             raise ValueError("SESSION_EXPIRED")
 
+        actual_app_key = app_key or self.app_key
         t = str(int(time.time() * 1000))
         data_str = json.dumps(data_dict, separators=(",", ":"))
         token = self._get_tk()
-        sign = self._sign(token, t, data_str)
+        sign = self._sign(token, t, data_str, actual_app_key)
         url = self.gateway.format(api=api)
 
         params = {
-            "jsv": "2.7.5", "appKey": self.app_key, "t": t, "sign": sign,
+            "jsv": "2.7.5", "appKey": actual_app_key, "t": t, "sign": sign,
             "type": "originaljson", "api": api, "v": "1.0", "dataType": "json",
             "__channel-id__": self.channel_id,
         }
@@ -147,7 +154,7 @@ class MTOPClient:
                 if refreshed:
                     token = self._get_tk()
                     t = str(int(time.time() * 1000))
-                    sign = self._sign(token, t, data_str)
+                    sign = self._sign(token, t, data_str, actual_app_key)
                     params.update({"t": t, "sign": sign})
                     headers["cookie"] = self.cookie_str
                     response = await client.post(url, params=params, data=payload, headers=headers)

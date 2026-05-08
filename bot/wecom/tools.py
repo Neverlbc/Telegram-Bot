@@ -308,12 +308,24 @@ async def tool_create_ae_promo_code(
 
 
 async def _bind_products_to_promo(client: Any, promotion_id: str, pid_list: list[str]) -> bool:
-    """尝试将产品 ID 列表绑定到已创建的促销活动。返回是否成功。"""
-    from bot.services.aliexpress_mtop import MTOPClient
+    """将产品 ID 列表绑定到已创建的促销活动。
+    使用 mtop.global.merchant.promotion.ae.voucher.product.nadd（POST, appKey=12574478）。
+    """
+    from bot.services.aliexpress_mtop import PRODUCT_APP_KEY
     try:
-        bind_api = "mtop.global.merchant.promotion.ae.voucher.product.save"
-        bind_data = {"promotionId": promotion_id, "productIds": pid_list}
-        res = await client.request(bind_api, bind_data)
+        # 产品 ID 需为整数
+        product_ids = [int(p) if p.isdigit() else p for p in pid_list]
+        bind_data = {
+            "promotionId": promotion_id,
+            "channelId": client.channel_id,
+            "productIds": product_ids,
+            "toolCode": "seller_voucher",
+        }
+        res = await client.request(
+            "mtop.global.merchant.promotion.ae.voucher.product.nadd",
+            bind_data,
+            app_key=PRODUCT_APP_KEY,
+        )
         ret_msg = str(res.get("ret", [""])[0])
         logger.info("[ae-promo] bind_products promotionId=%s ret=%s", promotion_id, ret_msg)
         return "SUCCESS" in ret_msg
