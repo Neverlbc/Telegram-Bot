@@ -232,7 +232,7 @@ async def tool_create_ae_promo_code(
         promo_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
 
     pid_list = [p.strip() for p in product_ids.split(",") if p.strip()] if product_ids else []
-    product_scope = "part_product" if pid_list else "entire_shop"
+    product_scope = "part" if pid_list else "entire_shop"
 
     client = await MTOPClient.create(store_name)
     if not client.cookie_str:
@@ -253,7 +253,8 @@ async def tool_create_ae_promo_code(
         "denominationNew": discount_value, "releasedNum": total_num, "numPerBuyer": num_per_buyer,
         "countryScope": "all_country", "productScope": product_scope,
         "couponCode": promo_code, "minOrderAmountNew": min_order_amount,
-        "couponChannelType": "1", "consumeStartTime": now_ms, "consumeEndTime": end_ms,
+        "couponChannelType": "1", "affiliateChannel": False,
+        "consumeStartTime": now_ms, "consumeEndTime": end_ms,
         "applyStartTime": None, "memberLevel": "A0", "displayChannel": "[]",
         "shipToCountryCodes": "", "fromAgent": False, "updateAutoRenewFlag": True
     }
@@ -266,8 +267,17 @@ async def tool_create_ae_promo_code(
         if "SUCCESS" not in ret_msg:
             return f"⚠️ 在【{store_name}】发码失败：{ret_msg}"
 
-        promo_data = res.get("data") or {}
-        promotion_id = str(promo_data.get("promotionId") or promo_data.get("id") or "")
+        # 响应结构: {"data": {"data": {"content": "5000000206400879", ...}, "type": "action"}}
+        # promotionId 在 data.data.content
+        outer = res.get("data") or {}
+        inner = outer.get("data") or {}
+        promotion_id = str(
+            inner.get("content")
+            or outer.get("content")
+            or outer.get("promotionId")
+            or outer.get("id")
+            or ""
+        )
 
         lines = [
             f"✅ 成功在【{store_name}】发码！",
@@ -308,27 +318,29 @@ async def tool_create_ae_promo_code(
 
 
 async def _bind_products_to_promo(client: Any, promotion_id: str, pid_list: list[str]) -> bool:
-    """将产品 ID 列表绑定到已创建的促销活动。
-    使用 mtop.global.merchant.promotion.ae.voucher.product.nadd（POST, appKey=12574478）。
+    """将产品 ID 列表逐一绑定到已创建的促销活动。
+    nadd API：checked 字段传单个产品 ID 字符串，promotionId 为整数。
     """
-    from bot.services.aliexpress_mtop import PRODUCT_APP_KEY
     try:
-        # 产品 ID 需为整数
-        product_ids = [int(p) if p.isdigit() else p for p in pid_list]
-        bind_data = {
-            "promotionId": promotion_id,
-            "channelId": client.channel_id,
-            "productIds": product_ids,
-            "toolCode": "seller_voucher",
-        }
-        res = await client.request(
-            "mtop.global.merchant.promotion.ae.voucher.product.nadd",
-            bind_data,
-            app_key=PRODUCT_APP_KEY,
-        )
-        ret_msg = str(res.get("ret", [""])[0])
-        logger.info("[ae-promo] bind_products promotionId=%s ret=%s", promotion_id, ret_msg)
-        return "SUCCESS" in ret_msg
+        promo_id_int = int(promotion_id)
+        success_count = 0
+        for pid in pid_list:
+            bind_data = {
+                "operation": "copy",
+                "promotionId": promo_id_int,
+                "channelId": client.channel_id,
+                "marketingToolCode": "seller_voucher",
+                "checked": str(pid),
+            }
+            res = await client.request(
+                "mtop.global.merchant.promotion.ae.voucher.product.nadd",
+                bind_data,
+            )
+            ret_msg = str(res.get("ret", [""])[0])
+            logger.info("[ae-promo] bind pid=%s promotionId=%s ret=%s", pid, promotion_id, ret_msg)
+            if "SUCCESS" in ret_msg:
+                success_count += 1
+        return success_count == len(pid_list)
     except Exception as exc:
         logger.warning("[ae-promo] bind_products failed: %s", exc)
         return False
