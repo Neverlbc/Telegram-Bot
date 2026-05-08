@@ -162,7 +162,7 @@ async def main_async() -> None:
                 await client.reply_welcome(
                     frame,
                     f"您好，我是 {settings.wecom_bot_name}，A-BF 跨境电商团队内部助理。可以问我：\n"
-                    "  • 莫斯科现货库存 / SKU 价格\n"
+                    "  • 莫斯科现货库存\n"
                     "  • Telegram Bot 日报 / 用户排行\n"
                     "  • SN 验真 / 检修状态查询\n"
                     "  • 速卖通店铺折扣码创建",
