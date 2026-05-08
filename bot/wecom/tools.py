@@ -244,8 +244,8 @@ async def tool_create_ae_promo_code(
         )
 
     now_ms = int(time.time() * 1000)
-    # part scope 要求 consumeStartTime 至少 10 分钟后，否则 API 报错；取 10 分钟整
-    start_ms = now_ms + (10 * 60 * 1000) if pid_list else now_ms
+    # part scope 要求 consumeStartTime 至少 10+ 分钟后；用 15 分钟留出余量
+    start_ms = now_ms + (15 * 60 * 1000) if pid_list else now_ms
     end_ms = now_ms + (validity_days * 24 * 60 * 60 * 1000)
 
     api = "mtop.global.merchant.promotion.ae.voucher.save"
@@ -264,7 +264,8 @@ async def tool_create_ae_promo_code(
     try:
         res = await client.request(api, data)
         ret_msg = str(res.get("ret", [""])[0])
-        logger.info("[ae-promo] store=%s ret=%s product_scope=%s", store_name, ret_msg, product_scope)
+        logger.info("[ae-promo] store=%s ret=%s product_scope=%s data=%s",
+                    store_name, ret_msg, product_scope, str(res.get("data"))[:200])
 
         if "SUCCESS" not in ret_msg:
             return f"⚠️ 在【{store_name}】发码失败：{ret_msg}"
@@ -289,7 +290,7 @@ async def tool_create_ae_promo_code(
             f"🎟️ 发放数量: {total_num} 张 (每人限用 {num_per_buyer} 张)",
             f"⏳ 有效期: 约 {validity_days} 天",
             f"📦 适用范围: {'全部产品' if not pid_list else f'指定产品 ({len(pid_list)} 个)'}",
-            *([f"⏰ 约 10 分钟后生效（指定产品限制）"] if pid_list else []),
+            *([f"⏰ 约 15 分钟后生效（指定产品模式限制）"] if pid_list else []),
         ]
 
         if pid_list:
