@@ -14,6 +14,8 @@ from bot.services.inventory_tiers import inventory_price_currency_keys
 logger = logging.getLogger(__name__)
 
 PRICE_OVERVIEW_TITLE = "Brand Price Overview"
+EXCLUDED_PRICE_WORKSHEET_GIDS = {575743696, 2094666162}
+EXCLUDED_PRICE_WORKSHEET_TITLES = {"Cost Sheet", "Profit And Loss Statement"}
 
 
 @dataclass
@@ -71,6 +73,29 @@ def _is_price_overview_title(title: str) -> bool:
     return _normalize_title(title) == _normalize_title(PRICE_OVERVIEW_TITLE)
 
 
+def _worksheet_gid(worksheet: Any) -> int | None:
+    for attr in ("id", "gid"):
+        value = getattr(worksheet, attr, None)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _is_excluded_price_worksheet(worksheet: Any) -> bool:
+    gid = _worksheet_gid(worksheet)
+    if gid in EXCLUDED_PRICE_WORKSHEET_GIDS:
+        return True
+
+    title = getattr(worksheet, "title", "")
+    normalized_excluded_titles = {
+        _normalize_title(excluded_title)
+        for excluded_title in EXCLUDED_PRICE_WORKSHEET_TITLES
+    }
+    return _normalize_title(str(title)) in normalized_excluded_titles
+
+
 def _open_spreadsheet() -> Any:
     if not settings.outdoor_sheet_id:
         raise ValueError("OUTDOOR_SHEET_ID 未配置")
@@ -82,7 +107,12 @@ def _price_brand_titles_sync() -> list[str]:
     titles: list[str] = []
     for worksheet in spreadsheet.worksheets():
         title = worksheet.title.strip()
-        if not title or _is_stock_title(title) or _is_price_overview_title(title):
+        if (
+            not title
+            or _is_stock_title(title)
+            or _is_price_overview_title(title)
+            or _is_excluded_price_worksheet(worksheet)
+        ):
             continue
         titles.append(title)
     return titles
