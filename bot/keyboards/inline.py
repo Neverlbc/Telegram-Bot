@@ -232,6 +232,11 @@ def inventory_hidden_menu_keyboard(lang: str = "zh", tier: str = "vip") -> Inlin
         "ru": {"stock": "📦 Наличие в Москве", "price": f"💰 Цены {tier_label}"},
     }
     t = texts.get(lang, texts["zh"])
+    rhp_text = {
+        "zh": "RHP 价格管控",
+        "en": "RHP Price Control",
+        "ru": "RHP контроль цен",
+    }.get(lang, "RHP 价格管控")
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text=t["stock"],
@@ -240,6 +245,10 @@ def inventory_hidden_menu_keyboard(lang: str = "zh", tier: str = "vip") -> Inlin
     builder.row(InlineKeyboardButton(
         text=t["price"],
         callback_data=InventoryCallback(action="price_brands", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=rhp_text,
+        callback_data=InventoryCallback(action="rhp_menu", vip=True, tier=tier).pack(),
     ))
     for row in nav_buttons("menu", lang):
         builder.row(*row)

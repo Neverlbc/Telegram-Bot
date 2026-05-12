@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import logging
 from html import escape
+from pathlib import Path
 from unicodedata import east_asian_width
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.config import settings
@@ -32,6 +33,7 @@ from bot.services.outdoor_prices import (
     get_outdoor_price_brand_titles,
     get_outdoor_price_items,
 )
+from bot.services.rhp import RHPGuidePriceItem, get_rhp_guide_prices
 from bot.services.translation import translate_batch
 from bot.services.inventory_tiers import (
     PRICE_TIER_CODES,
@@ -208,6 +210,100 @@ TEXTS["ru"].update({
     "price_image_attached": "прикреплено к этому сообщению",
     "price_empty": "Нет данных по ценам.",
     "price_loading_err": "Не удалось загрузить таблицу цен. Попробуйте позже.",
+})
+
+TEXTS["zh"].update({
+    "rhp_menu_title": (
+        "<b>A-BF RHP 价格管控</b>\n\n"
+        "RHP 用于会员渠道的指导价声明、规则查看和违规举报。请选择功能："
+    ),
+    "rhp_intro_title": "<b>RHP 文本介绍</b>",
+    "rhp_intro": (
+        "RHP 是 A-BF 对会员渠道价格秩序的内部管理规则。\n\n"
+        "指导价用于核实公开报价、平台价格和渠道报价是否明显偏离约定范围。"
+        "如发现疑似违规，可通过举报入口提交线索。"
+    ),
+    "rhp_rules_caption": "A-BF RHP 规则文件",
+    "rhp_rules_sent": "规则文件已发送，请在下方文件中查看。",
+    "rhp_rules_missing": "RHP 规则文件未找到，请检查服务器文件路径配置。",
+    "rhp_report_title": "<b>RHP 举报入口</b>",
+    "rhp_report_text": (
+        "举报专用频道：{channel}\n"
+        "直接对接举报：{contact}\n\n"
+        "所有举报严格匿名，仅用于核实与私下处理，不公开、不点名、不扩散。"
+    ),
+    "rhp_report_channel": "举报专用频道",
+    "rhp_report_contact": "直接对接举报",
+    "rhp_guide_title": "<b>A-BF RHP 指导价</b>",
+    "rhp_guide_empty": "暂未读取到 RHP 指导价数据。",
+    "rhp_guide_loading_err": "读取 RHP 指导价失败，请稍后再试。",
+    "rhp_back": "返回 RHP",
+    "rhp_rules_button": "查看 RHP 文件",
+    "rhp_intro_button": "文本介绍",
+    "rhp_report_button": "举报入口",
+    "rhp_guide_button": "指导价声明",
+})
+TEXTS["en"].update({
+    "rhp_menu_title": (
+        "<b>A-BF RHP Price Control</b>\n\n"
+        "RHP contains channel guide prices, rules, and report entry points. Choose an action:"
+    ),
+    "rhp_intro_title": "<b>RHP Introduction</b>",
+    "rhp_intro": (
+        "RHP is A-BF's internal price-control rule set for member channels.\n\n"
+        "The guide price is used to check whether public offers, platform prices, or channel quotes "
+        "are materially outside the agreed range."
+    ),
+    "rhp_rules_caption": "A-BF RHP rules",
+    "rhp_rules_sent": "The RHP rules file has been sent below.",
+    "rhp_rules_missing": "RHP rules file was not found. Check the configured server path.",
+    "rhp_report_title": "<b>RHP Report Entry</b>",
+    "rhp_report_text": (
+        "Report channel: {channel}\n"
+        "Direct report contact: {contact}\n\n"
+        "All reports are anonymous and used only for verification and private handling."
+    ),
+    "rhp_report_channel": "Report channel",
+    "rhp_report_contact": "Direct report",
+    "rhp_guide_title": "<b>A-BF RHP Guide Prices</b>",
+    "rhp_guide_empty": "No RHP guide price data was found.",
+    "rhp_guide_loading_err": "Failed to load RHP guide prices. Please try again later.",
+    "rhp_back": "Back to RHP",
+    "rhp_rules_button": "View RHP file",
+    "rhp_intro_button": "Introduction",
+    "rhp_report_button": "Report entry",
+    "rhp_guide_button": "Guide prices",
+})
+TEXTS["ru"].update({
+    "rhp_menu_title": (
+        "<b>A-BF RHP контроль цен</b>\n\n"
+        "RHP содержит рекомендованные цены, правила и канал для сообщений о нарушениях. Выберите действие:"
+    ),
+    "rhp_intro_title": "<b>Описание RHP</b>",
+    "rhp_intro": (
+        "RHP - внутренние правила A-BF для контроля цен в партнерских каналах.\n\n"
+        "Рекомендованная цена используется для проверки открытых предложений, цен на площадках "
+        "и предложений каналов на существенное отклонение от согласованного диапазона."
+    ),
+    "rhp_rules_caption": "Правила A-BF RHP",
+    "rhp_rules_sent": "Файл с правилами RHP отправлен ниже.",
+    "rhp_rules_missing": "Файл правил RHP не найден. Проверьте путь на сервере.",
+    "rhp_report_title": "<b>Канал для сообщений RHP</b>",
+    "rhp_report_text": (
+        "Канал для сообщений: {channel}\n"
+        "Прямой контакт: {contact}\n\n"
+        "Все сообщения анонимны и используются только для проверки и частной обработки."
+    ),
+    "rhp_report_channel": "Канал для сообщений",
+    "rhp_report_contact": "Прямой контакт",
+    "rhp_guide_title": "<b>A-BF RHP рекомендованные цены</b>",
+    "rhp_guide_empty": "Данные по рекомендованным ценам RHP не найдены.",
+    "rhp_guide_loading_err": "Не удалось загрузить рекомендованные цены RHP. Попробуйте позже.",
+    "rhp_back": "Назад к RHP",
+    "rhp_rules_button": "Открыть файл RHP",
+    "rhp_intro_button": "Описание",
+    "rhp_report_button": "Сообщить",
+    "rhp_guide_button": "Рекомендованные цены",
 })
 
 
@@ -501,6 +597,105 @@ def _price_view_mode_keyboard(lang: str, tier: str, brand_page: int) -> InlineKe
         callback_data=NavCallback(action="home").pack(),
     ))
     return builder
+
+
+def _rhp_menu_keyboard(lang: str, tier: str) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_intro_button"),
+        callback_data=InventoryCallback(action="rhp_intro", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_rules_button"),
+        callback_data=InventoryCallback(action="rhp_rules", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_report_button"),
+        callback_data=InventoryCallback(action="rhp_report", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_guide_button"),
+        callback_data=InventoryCallback(action="rhp_guide", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "返回隐藏菜单", "en": "Back to hidden menu", "ru": "Назад в скрытое меню"}.get(lang, "Back"),
+        callback_data=InventoryCallback(action="tier_menu", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "主菜单", "en": "Main Menu", "ru": "Главное меню"}.get(lang, "Main Menu"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+    return builder
+
+
+def _rhp_report_keyboard(lang: str, tier: str) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    if settings.rhp_report_channel_url:
+        builder.row(InlineKeyboardButton(
+            text=_t(lang, "rhp_report_channel"),
+            url=settings.rhp_report_channel_url,
+        ))
+    if settings.rhp_report_contact_url:
+        builder.row(InlineKeyboardButton(
+            text=_t(lang, "rhp_report_contact"),
+            url=settings.rhp_report_contact_url,
+        ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_back"),
+        callback_data=InventoryCallback(action="rhp_menu", vip=True, tier=tier).pack(),
+    ))
+    return builder
+
+
+def _rhp_rules_file_for_lang(lang: str) -> Path:
+    if lang == "zh":
+        return Path(settings.rhp_rules_zh_file)
+    return Path(settings.rhp_rules_ru_file)
+
+
+def _rhp_guide_price_table(items: list[RHPGuidePriceItem], lang: str) -> str:
+    headers = {
+        "zh": ("SKU", "指导价"),
+        "en": ("SKU", "Guide"),
+        "ru": ("SKU", "Цена"),
+    }.get(lang, ("SKU", "Guide"))
+    sku_w = max(_display_width(headers[0]), min(max((_display_width(item.sku) for item in items), default=8), 18))
+    price_w = max(_display_width(headers[1]), max((_display_width(item.guide_price) for item in items), default=6))
+    header = f"{_fit_cell(headers[0], sku_w)}  {_right_cell(headers[1], price_w)}"
+    sep = "-" * max(16, _display_width(header))
+
+    rows: list[str] = []
+    current_brand = ""
+    for item in items:
+        brand = item.brand.strip()
+        if brand and brand != current_brand:
+            if rows:
+                rows.append("")
+            rows.append(f"[{brand}]")
+            rows.append(header)
+            rows.append(sep)
+            current_brand = brand
+        elif not rows:
+            rows.append(header)
+            rows.append(sep)
+        rows.append(f"{_fit_cell(item.sku, sku_w)}  {_right_cell(item.guide_price, price_w)}")
+
+    return f"<pre>{escape(chr(10).join(rows))}</pre>"
+
+
+def _rhp_guide_price_chunks(items: list[RHPGuidePriceItem], lang: str, max_len: int = 3000) -> list[str]:
+    chunks: list[str] = []
+    current: list[RHPGuidePriceItem] = []
+    for item in items:
+        projected = [*current, item]
+        if current and len(_rhp_guide_price_table(projected, lang)) > max_len:
+            chunks.append(_rhp_guide_price_table(current, lang))
+            current = [item]
+        else:
+            current = projected
+    if current:
+        chunks.append(_rhp_guide_price_table(current, lang))
+    return chunks
 
 
 def _price_field_labels(lang: str) -> dict[str, str]:
@@ -932,6 +1127,137 @@ async def on_inventory_price_table(
     await callback.answer()
     for table_chunk in table_chunks[1:]:
         await callback.message.answer(table_chunk)
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "rhp_menu"))
+async def on_rhp_menu(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+    await callback.message.edit_text(
+        _t(lang, "rhp_menu_title"),
+        reply_markup=_rhp_menu_keyboard(lang, tier).as_markup(),
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "rhp_intro"))
+async def on_rhp_intro(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+    await callback.message.edit_text(
+        "\n\n".join((_t(lang, "rhp_intro_title"), _t(lang, "rhp_intro"))),
+        reply_markup=_rhp_menu_keyboard(lang, tier).as_markup(),
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "rhp_rules"))
+async def on_rhp_rules(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+
+    file_path = _rhp_rules_file_for_lang(lang)
+    if not file_path.exists():
+        await callback.message.edit_text(
+            _t(lang, "rhp_rules_missing"),
+            reply_markup=_rhp_menu_keyboard(lang, tier).as_markup(),
+        )
+        await callback.answer()
+        return
+
+    await callback.message.edit_text(
+        _t(lang, "rhp_rules_sent"),
+        reply_markup=_rhp_menu_keyboard(lang, tier).as_markup(),
+    )
+    await callback.message.answer_document(
+        FSInputFile(str(file_path)),
+        caption=_t(lang, "rhp_rules_caption"),
+    )
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "rhp_report"))
+async def on_rhp_report(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+    await callback.message.edit_text(
+        "\n\n".join((
+            _t(lang, "rhp_report_title"),
+            _t(lang, "rhp_report_text").format(
+                channel=escape(settings.rhp_report_channel_url or "-"),
+                contact=escape(settings.rhp_report_contact_url or "-"),
+            ),
+        )),
+        reply_markup=_rhp_report_keyboard(lang, tier).as_markup(),
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "rhp_guide"))
+async def on_rhp_guide(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+
+    items = await get_rhp_guide_prices()
+    if not items:
+        await callback.message.edit_text(
+            _t(lang, "rhp_guide_empty"),
+            reply_markup=_rhp_menu_keyboard(lang, tier).as_markup(),
+        )
+        await callback.answer()
+        return
+
+    chunks = _rhp_guide_price_chunks(items, lang)
+    await callback.message.edit_text(
+        "\n\n".join((_t(lang, "rhp_guide_title"), chunks[0])),
+        reply_markup=_rhp_menu_keyboard(lang, tier).as_markup(),
+    )
+    await callback.answer()
+    for chunk in chunks[1:]:
+        await callback.message.answer(chunk)
 
 
 @router.callback_query(InventoryCallback.filter(F.action == "category"))

@@ -14,7 +14,7 @@ from bot.services.inventory_tiers import inventory_price_currency_keys
 logger = logging.getLogger(__name__)
 
 PRICE_OVERVIEW_TITLE = "Brand Price Overview"
-EXCLUDED_PRICE_WORKSHEET_GIDS = {575743696, 2094666162}
+EXCLUDED_PRICE_WORKSHEET_GIDS = {575743696, 1606490651, 2094666162}
 EXCLUDED_PRICE_WORKSHEET_TITLES = {"Cost Sheet", "Profit And Loss Statement"}
 
 

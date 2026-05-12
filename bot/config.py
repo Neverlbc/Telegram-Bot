@@ -121,6 +121,13 @@ class Settings(BaseSettings):
     club_tg_link: str = Field("https://t.me/placeholder_club", description="A-BF 晨夜俱乐部 TG 链接")
     service_center_tg_link: str = Field("https://t.me/placeholder_service", description="俄罗斯服务中心 TG 入口链接")
 
+    # ── RHP 价格管控 ───────────────────────────────────
+    rhp_guide_sheet_gid: int = Field(1606490651, description="RHP 指导价 Google Sheet tab GID")
+    rhp_rules_zh_file: str = Field(str(BASE_DIR / "docs" / "rhp" / "rhp_rules_zh.pdf"))
+    rhp_rules_ru_file: str = Field(str(BASE_DIR / "docs" / "rhp" / "rhp_rules_ru.pdf"))
+    rhp_report_channel_url: str = Field("https://t.me/RU_PMT")
+    rhp_report_contact_url: str = Field("https://t.me/ABFOfficialGroup")
+
     # ── Google Sheets (新模块) ─────────────────────────
     outdoor_sheet_id: str = Field("", description="莫斯科户外现货 Google Sheet ID")
     service_center_sheet_id: str = Field("", description="服务中心检修 Google Sheet ID")
