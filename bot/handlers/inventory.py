@@ -306,6 +306,25 @@ TEXTS["ru"].update({
     "rhp_guide_button": "Рекомендованные цены",
 })
 
+TEXTS["zh"].update({
+    "price_series_title": "💰 <b>{tier} 价格查询</b>\n品牌：<b>{brand}</b>\n\n请选择产品系列：",
+    "price_series_all": "展示全部",
+    "price_series_back": "返回系列",
+    "price_selected_series": "系列：<b>{series}</b>",
+})
+TEXTS["en"].update({
+    "price_series_title": "💰 <b>{tier} Price Query</b>\nBrand: <b>{brand}</b>\n\nSelect a product series:",
+    "price_series_all": "Show all",
+    "price_series_back": "Back to series",
+    "price_selected_series": "Series: <b>{series}</b>",
+})
+TEXTS["ru"].update({
+    "price_series_title": "💰 <b>Цены {tier}</b>\nБренд: <b>{brand}</b>\n\nВыберите серию:",
+    "price_series_all": "Показать все",
+    "price_series_back": "Назад к сериям",
+    "price_selected_series": "Серия: <b>{series}</b>",
+})
+
 
 def _t(lang: str, key: str) -> str:
     return TEXTS.get(lang, TEXTS["zh"]).get(key, TEXTS["zh"][key])
@@ -565,14 +584,60 @@ def _price_brand_keyboard(brands: list[str], lang: str, tier: str) -> InlineKeyb
     return builder
 
 
-def _price_result_keyboard(lang: str, tier: str) -> InlineKeyboardBuilder:
+def _price_result_keyboard(
+    lang: str,
+    tier: str,
+    brand_page: int | None = None,
+    back_to_series: bool = False,
+) -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
+    if back_to_series and brand_page is not None:
+        builder.row(InlineKeyboardButton(
+            text=_t(lang, "price_series_back"),
+            callback_data=InventoryCallback(action="price_brand", vip=True, tier=tier, page=brand_page).pack(),
+        ))
     builder.row(InlineKeyboardButton(
         text={"zh": "⬅️ 返回品牌", "en": "⬅️ Brands", "ru": "⬅️ Бренды"}.get(lang, "⬅️ 返回品牌"),
         callback_data=InventoryCallback(action="price_brands", vip=True, tier=tier).pack(),
     ))
     builder.row(InlineKeyboardButton(
         text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 主菜单"),
+        callback_data=NavCallback(action="home").pack(),
+    ))
+    return builder
+
+
+def _price_series_names(items: list[OutdoorPriceItem]) -> list[str]:
+    return list(dict.fromkeys(item.series.strip() for item in items if item.series.strip()))
+
+
+def _filter_price_series(items: list[OutdoorPriceItem], series_name: str) -> list[OutdoorPriceItem]:
+    return [item for item in items if item.series.strip() == series_name]
+
+
+def _price_series_keyboard(series_names: list[str], lang: str, tier: str, brand_page: int) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    for idx, series_name in enumerate(series_names, start=1):
+        builder.row(InlineKeyboardButton(
+            text=series_name,
+            callback_data=InventoryCallback(
+                action="price_table",
+                vip=True,
+                tier=tier,
+                page=brand_page,
+                cat_id=str(idx),
+            ).pack(),
+        ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "price_series_all"),
+        callback_data=InventoryCallback(action="price_table", vip=True, tier=tier, page=brand_page).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "⬅️ 返回品牌", "en": "⬅️ Brands", "ru": "⬅️ Бренды"}.get(lang, "⬅️ Brands"),
+        callback_data=InventoryCallback(action="price_brands", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text={"zh": "🏠 主菜单", "en": "🏠 Main Menu", "ru": "🏠 Главное меню"}.get(lang, "🏠 Main Menu"),
         callback_data=NavCallback(action="home").pack(),
     ))
     return builder
@@ -1054,6 +1119,19 @@ async def on_inventory_price_brand(
         await callback.answer(_t(lang, "price_loading_err"), show_alert=True)
         return
     brand = brands[brand_idx]
+    await callback.answer()
+    items, _ = await get_outdoor_price_items(brand, tier)
+    series_names = _price_series_names(items)
+    if series_names:
+        await callback.message.edit_text(
+            _t(lang, "price_series_title").format(
+                tier=inventory_tier_label(tier),
+                brand=escape(brand),
+            ),
+            reply_markup=_price_series_keyboard(series_names, lang, tier, callback_data.page).as_markup(),
+        )
+        return
+
     await callback.message.edit_text(
         _t(lang, "price_view_title").format(
             tier=inventory_tier_label(tier),
@@ -1061,7 +1139,6 @@ async def on_inventory_price_brand(
         ),
         reply_markup=_price_view_mode_keyboard(lang, tier, callback_data.page).as_markup(),
     )
-    await callback.answer()
 
 
 @router.callback_query(InventoryCallback.filter(F.action == "price_images"))
@@ -1097,11 +1174,27 @@ async def on_inventory_price_table(
         return
     brand = brands[brand_idx]
     items, rate = await get_outdoor_price_items(brand, tier)
+    series_names = _price_series_names(items)
+    selected_series = ""
+    if callback_data.cat_id.strip():
+        try:
+            series_idx = int(callback_data.cat_id) - 1
+        except ValueError:
+            series_idx = -1
+        if series_idx < 0 or series_idx >= len(series_names):
+            await callback.answer(_t(lang, "price_loading_err"), show_alert=True)
+            return
+        selected_series = series_names[series_idx]
+        items = _filter_price_series(items, selected_series)
 
     if not items:
         await callback.message.edit_text(
             _t(lang, "price_empty"),
-            reply_markup=_price_view_mode_keyboard(lang, tier, callback_data.page).as_markup(),
+            reply_markup=(
+                _price_series_keyboard(series_names, lang, tier, callback_data.page).as_markup()
+                if series_names
+                else _price_view_mode_keyboard(lang, tier, callback_data.page).as_markup()
+            ),
         )
         await callback.answer()
         return
@@ -1109,11 +1202,16 @@ async def on_inventory_price_table(
     # 用户语言若与 Sheet 描述语言不同，调用 OpenAI 翻译并缓存
     await _enrich_descriptions(items, lang)
     table_chunks = _price_table_chunks(items, lang, tier)
-    first_text = "\n\n".join((
+    title_parts = [
         _t(lang, "price_selected_brand").format(
             tier=inventory_tier_label(tier),
             brand=escape(brand),
-        ),
+        )
+    ]
+    if selected_series:
+        title_parts.append(_t(lang, "price_selected_series").format(series=escape(selected_series)))
+    first_text = "\n\n".join((
+        "\n".join(title_parts),
         _price_rate_notice(lang, rate),
         _t(lang, "price_result_header").format(count=len(items)),
         table_chunks[0],
@@ -1121,7 +1219,12 @@ async def on_inventory_price_table(
     ))
     await callback.message.edit_text(
         first_text,
-        reply_markup=_price_result_keyboard(lang, tier).as_markup(),
+        reply_markup=_price_result_keyboard(
+            lang,
+            tier,
+            brand_page=callback_data.page,
+            back_to_series=bool(series_names),
+        ).as_markup(),
         disable_web_page_preview=True,
     )
     await callback.answer()

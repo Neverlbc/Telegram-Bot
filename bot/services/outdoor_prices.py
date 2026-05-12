@@ -26,6 +26,7 @@ class OutdoorPriceItem:
     moscow_stock: str = ""
     status: str = ""
     info: str = ""
+    series: str = ""
     prices: dict[str, str] | None = None
 
     def description_for(self, lang: str) -> str:
@@ -357,6 +358,28 @@ def _price_column_index(roles: dict[str, int], tier: str, key: str) -> int | Non
     return None
 
 
+def _is_series_header_row(row: list[str], sku: str, roles: dict[str, int], tier: str) -> bool:
+    """Detect visual section rows such as "Outdoor - Series" in brand price tabs."""
+    label = " ".join((sku or "").split())
+    if not label or "series" not in label.casefold():
+        return False
+
+    role_names = [
+        "image",
+        "description_zh",
+        "description_en",
+        "description_ru",
+        "moscow_stock",
+        "status",
+        *[role for key in inventory_price_currency_keys(tier) for role in _price_role_candidates(tier, key)],
+    ]
+    for role in role_names:
+        idx = roles.get(role)
+        if idx is not None and idx < len(row) and str(row[idx]).strip():
+            return False
+    return True
+
+
 def _looks_like_url(value: str) -> bool:
     text = (value or "").strip()
     return text.startswith("http://") or text.startswith("https://")
@@ -431,6 +454,7 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
     overview_usd_prices = _overview_tier_price_map(overview_values, tier) if "usd" in wanted_prices else {}
 
     items: list[OutdoorPriceItem] = []
+    current_series = ""
     for row_idx, row in enumerate(values[header_idx + 1:], start=header_idx + 1):
         padded = [*row, "", "", "", "", "", ""]
         formula_row = formula_values[row_idx] if row_idx < len(formula_values) else []
@@ -438,6 +462,9 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
         sku_idx = roles.get("sku", 0)
         sku = padded[sku_idx].strip() if sku_idx < len(padded) else ""
         if not sku:
+            continue
+        if _is_series_header_row(padded, sku, roles, tier):
+            current_series = sku
             continue
 
         prices: dict[str, str] = {}
@@ -466,6 +493,7 @@ def _price_items_sync(brand_title: str, tier: str) -> tuple[list[OutdoorPriceIte
                 moscow_stock=_pick_role_value(padded, roles, "moscow_stock"),
                 status=_pick_role_value(padded, roles, "status"),
                 info=_row_info(headers, padded, roles),
+                series=current_series,
                 prices=prices,
             )
         )
