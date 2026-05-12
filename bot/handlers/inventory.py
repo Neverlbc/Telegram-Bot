@@ -1217,19 +1217,23 @@ async def on_inventory_price_table(
         table_chunks[0],
         _price_rate_note(lang, rate),
     ))
+    result_keyboard = _price_result_keyboard(
+        lang,
+        tier,
+        brand_page=callback_data.page,
+        back_to_series=bool(series_names),
+    ).as_markup()
     await callback.message.edit_text(
         first_text,
-        reply_markup=_price_result_keyboard(
-            lang,
-            tier,
-            brand_page=callback_data.page,
-            back_to_series=bool(series_names),
-        ).as_markup(),
+        reply_markup=result_keyboard if len(table_chunks) == 1 else None,
         disable_web_page_preview=True,
     )
     await callback.answer()
-    for table_chunk in table_chunks[1:]:
-        await callback.message.answer(table_chunk)
+    for idx, table_chunk in enumerate(table_chunks[1:], start=1):
+        await callback.message.answer(
+            table_chunk,
+            reply_markup=result_keyboard if idx == len(table_chunks) - 1 else None,
+        )
 
 
 @router.callback_query(InventoryCallback.filter(F.action == "rhp_menu"))
@@ -1354,13 +1358,17 @@ async def on_rhp_guide(
         return
 
     chunks = _rhp_guide_price_chunks(items, lang)
+    rhp_keyboard = _rhp_menu_keyboard(lang, tier).as_markup()
     await callback.message.edit_text(
         "\n\n".join((_t(lang, "rhp_guide_title"), chunks[0])),
-        reply_markup=_rhp_menu_keyboard(lang, tier).as_markup(),
+        reply_markup=rhp_keyboard if len(chunks) == 1 else None,
     )
     await callback.answer()
-    for chunk in chunks[1:]:
-        await callback.message.answer(chunk)
+    for idx, chunk in enumerate(chunks[1:], start=1):
+        await callback.message.answer(
+            chunk,
+            reply_markup=rhp_keyboard if idx == len(chunks) - 1 else None,
+        )
 
 
 @router.callback_query(InventoryCallback.filter(F.action == "category"))
