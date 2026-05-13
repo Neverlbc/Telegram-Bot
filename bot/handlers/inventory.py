@@ -223,7 +223,7 @@ TEXTS["zh"].update({
         "指导价用于核实公开报价、平台价格和渠道报价是否明显偏离约定范围。"
         "如发现疑似违规，可通过举报入口提交线索。"
     ),
-    "rhp_rules_caption": "A-BF RHP 规则文件",
+    "rhp_rules_caption": "📘 请查阅相关规章制度",
     "rhp_rules_sent": "规则文件已发送，请在下方文件中查看。",
     "rhp_rules_missing": "RHP 规则文件未找到，请检查服务器文件路径配置。",
     "rhp_report_title": "<b>RHP 举报入口</b>",
@@ -238,6 +238,11 @@ TEXTS["zh"].update({
     "rhp_guide_empty": "暂未读取到 RHP 指导价数据。",
     "rhp_guide_loading_err": "读取 RHP 指导价失败，请稍后再试。",
     "rhp_back": "返回 RHP",
+    "rhp_guide_menu_title": "<b>A-BF RHP 指导价</b>\n\n请选择查看方式：",
+    "rhp_guide_quick_button": "快速展示",
+    "rhp_guide_brands_button": "按品牌查看",
+    "rhp_guide_brand_title": "<b>A-BF RHP 指导价</b>\n\n请选择品牌：",
+    "rhp_guide_brand_back": "返回品牌",
     "rhp_rules_button": "查看 RHP 文件",
     "rhp_intro_button": "文本介绍",
     "rhp_report_button": "举报入口",
@@ -254,8 +259,8 @@ TEXTS["en"].update({
         "The guide price is used to check whether public offers, platform prices, or channel quotes "
         "are materially outside the agreed range."
     ),
-    "rhp_rules_caption": "A-BF RHP rules",
-    "rhp_rules_sent": "The RHP rules file has been sent below.",
+    "rhp_rules_caption": "",
+    "rhp_rules_sent": "English RHP rules are not available yet.",
     "rhp_rules_missing": "RHP rules file was not found. Check the configured server path.",
     "rhp_report_title": "<b>RHP Report Entry</b>",
     "rhp_report_text": (
@@ -269,6 +274,11 @@ TEXTS["en"].update({
     "rhp_guide_empty": "No RHP guide price data was found.",
     "rhp_guide_loading_err": "Failed to load RHP guide prices. Please try again later.",
     "rhp_back": "Back to RHP",
+    "rhp_guide_menu_title": "<b>A-BF RHP Guide Prices</b>\n\nChoose a view:",
+    "rhp_guide_quick_button": "Quick view",
+    "rhp_guide_brands_button": "By brand",
+    "rhp_guide_brand_title": "<b>A-BF RHP Guide Prices</b>\n\nSelect a brand:",
+    "rhp_guide_brand_back": "Back to brands",
     "rhp_rules_button": "View RHP file",
     "rhp_intro_button": "Introduction",
     "rhp_report_button": "Report entry",
@@ -285,7 +295,7 @@ TEXTS["ru"].update({
         "Рекомендованная цена используется для проверки открытых предложений, цен на площадках "
         "и предложений каналов на существенное отклонение от согласованного диапазона."
     ),
-    "rhp_rules_caption": "Правила A-BF RHP",
+    "rhp_rules_caption": "📘 Пожалуйста, ознакомьтесь с соответствующими правилами.",
     "rhp_rules_sent": "Файл с правилами RHP отправлен ниже.",
     "rhp_rules_missing": "Файл правил RHP не найден. Проверьте путь на сервере.",
     "rhp_report_title": "<b>Канал для сообщений RHP</b>",
@@ -300,6 +310,11 @@ TEXTS["ru"].update({
     "rhp_guide_empty": "Данные по рекомендованным ценам RHP не найдены.",
     "rhp_guide_loading_err": "Не удалось загрузить рекомендованные цены RHP. Попробуйте позже.",
     "rhp_back": "Назад к RHP",
+    "rhp_guide_menu_title": "<b>A-BF RHP рекомендованные цены</b>\n\nВыберите режим просмотра:",
+    "rhp_guide_quick_button": "Быстрый просмотр",
+    "rhp_guide_brands_button": "По брендам",
+    "rhp_guide_brand_title": "<b>A-BF RHP рекомендованные цены</b>\n\nВыберите бренд:",
+    "rhp_guide_brand_back": "Назад к брендам",
     "rhp_rules_button": "Открыть файл RHP",
     "rhp_intro_button": "Описание",
     "rhp_report_button": "Сообщить",
@@ -323,6 +338,229 @@ TEXTS["ru"].update({
     "price_series_all": "Показать все",
     "price_series_back": "Назад к сериям",
     "price_selected_series": "Серия: <b>{series}</b>",
+})
+
+
+TEXTS["zh"].update({
+    "rhp_menu_title": (
+        "🏷️欢迎来到 RHP（俄罗斯健康价格）板块\n\n"
+        "本板块由 A-BF 服务中心（中国和俄罗斯办公室）发布并监管。\n\n"
+        "在这里您可以：\n"
+        "- 了解 RHP 核心规则\n"
+        "- 查看禁止行为清单\n"
+        "- 举报违规低价展示\n"
+        "- 下载官方规则文件\n\n"
+        "请使用下方按钮 👇"
+    ),
+    "rhp_intro_title": "📖 什么是 RHP？",
+    "rhp_intro": (
+        "RHP（俄罗斯健康价格）是 A-BF 在俄罗斯市场执行的终端零售建议价管控体系。\n\n"
+        "- 发布与监管方：A-BF 服务中心（中国和俄罗斯办公室）\n\n"
+        "核心规则（唯一且明确）：\n"
+        "• 我们只管控：所有电商平台公开展示价格\n"
+        "• 包括：Avito、个人店铺、社群公开报价、平台促销折扣展示价\n"
+        "• 所有公开展示价格必须 ≥ RHP 健康指导价\n"
+        "• 可以高于，绝对不能低于\n"
+        "• 私下成交、私下折扣、私下价格 — 我们完全不干涉、不管理、不核查\n\n"
+        "核心目的：不是限制销售，而是保护所有合作伙伴的长期利润空间，避免价格战崩盘、品牌贬值。"
+    ),
+    "rhp_rules_intro": (
+        "📄 RHP 规则文件\n\n"
+        "点击下方按钮下载完整 PDF：\n\n"
+        "严格禁止的“钻漏洞”行为（视同低价违规）：\n"
+        "• 标题/描述中写“скидка XXX руб.”、“цена в сообщении”、“пишите для лучшей цены”、"
+        "“уточняйте цену”等引导暗降文字\n"
+        "• 使用隐藏折扣、描述降价、私聊改价等方式制造公开展示价虚假，实际成交价低于 RHP\n\n"
+        "判定原则：只要是面向所有买家公开可见的降价信息，一律视为公开低价。"
+    ),
+    "rhp_rules_caption": "📘 请查阅相关规章制度",
+    "rhp_rules_sent": "规则文件已发送，请在下方文件中查看。",
+    "rhp_report_title": "🚨 举报违规低价展示",
+    "rhp_report_text": (
+        "如果您发现任何合作伙伴的公开展示价格低于 RHP 指导价，或存在“钻漏洞”行为，请按以下格式举报：\n\n"
+        "📌 举报需提供三项信息（缺一不可）：\n"
+        "1. 违规证据 — 店铺链接 + 截图 + 价格（三者都需要）\n"
+        "2. 违规人的联系方式 — WhatsApp 或 Telegram\n"
+        "3. 违规人所在地区 — 例如：莫斯科、圣彼得堡、新西伯利亚等\n\n"
+        "📮 举报方式（点击下方按钮）：\n"
+        "- 【RHP 举报频道】→ 直接进入专用频道提交\n"
+        "- 【直接举报人】→ 私信对接举报负责人\n\n"
+        "🔒 所有举报严格保密，仅用于核实与私下处理，不公开、不点名、不扩散。"
+    ),
+    "rhp_report_channel": "RHP 举报频道",
+    "rhp_report_contact": "直接举报人",
+    "rhp_guide_title": "A-BF RHP 指导价",
+    "rhp_guide_menu_title": (
+        "📢 RHP 指导价声明与执行规则\n\n"
+        "1. 所有公开展示价格必须 ≥ RHP 健康指导价。可以高于，绝对不能低于。\n\n"
+        "2. 违规处罚措施（仅针对公开低价展示及钻漏洞行为）：\n"
+        "   • 首次违规：私下提醒，要求 24 小时内调整价格，不予公开\n"
+        "   • 二次违规：直接降低售后优先级，延长售后响应与处理时效\n"
+        "   • 三次违规 / 屡教不改：立即停止所有品牌采购相关合作，并在各大平台、论坛、渠道社群进行违规公示\n\n"
+        "3. 长期遵守 RHP 合作伙伴激励：\n"
+        "   • 优先供货、优先排单、优先处理订单\n"
+        "   • 服务中心最高优先级售后与快速技术支持\n"
+        "   • 俱乐部高级权益、新品优先体验资格\n"
+        "   • 长期稳定合作倾斜，重点扶持优质合规伙伴\n\n"
+        "我们致力于维护健康、稳定、有序的市场环境，让大家长期赚钱、长期供货、长期享受优质资源。"
+    ),
+    "rhp_guide_quick_button": "快速展示",
+    "rhp_guide_brands_button": "按品牌查看",
+    "rhp_guide_button": "声明【必看】",
+    "rhp_rules_button": "查看 RHP 规则文件",
+    "rhp_intro_button": "什么是 RHP",
+    "rhp_report_button": "举报违规低价展示",
+})
+TEXTS["en"].update({
+    "rhp_menu_title": (
+        "🏷️Welcome to RHP (Russian Healthy Price) section\n\n"
+        "This section is published and supervised by A-BF Service Center (China and Russia Offices).\n\n"
+        "Here you can:\n"
+        "- Understand RHP core rules\n"
+        "- View prohibited behaviors\n"
+        "- Report price display violations\n"
+        "- Download official rules document\n\n"
+        "Use the buttons below 👇"
+    ),
+    "rhp_intro_title": "📖 What is RHP?",
+    "rhp_intro": (
+        "RHP (Russian Healthy Price) is A-BF's recommended retail price control system for the Russian market.\n\n"
+        "- Published and supervised by: A-BF Service Center (China and Russia Offices)\n\n"
+        "Core rules (clear and only):\n"
+        "• We only control: publicly displayed prices on all e-commerce platforms\n"
+        "• Including: Avito, individual stores, public community quotes, platform promotion display prices\n"
+        "• All public display prices must be ≥ RHP healthy price\n"
+        "• May be higher, never lower\n"
+        "• Private transactions, private discounts, private prices — we do not interfere, manage, or verify\n\n"
+        "Core purpose: not to restrict sales, but to protect the long-term profit margins of all partners, "
+        "preventing price wars and brand devaluation."
+    ),
+    "rhp_rules_intro": (
+        "📄 RHP Rules Document\n\n"
+        "Strictly prohibited \"loophole\" behaviors (treated as price violations):\n"
+        "• Writing in titles/descriptions: \"скидка XXX руб.\", \"цена в сообщении\", "
+        "\"пишите для лучшей цены\", \"уточняйте цену\", or any text implying hidden discounts\n"
+        "• Using hidden discounts, description price reductions, private chat price changes to create false "
+        "public prices while actual transaction price is below RHP\n\n"
+        "Judgment principle: Any price reduction information visible to all buyers is considered a public low price."
+    ),
+    "rhp_rules_sent": "English RHP rules file is not available yet.",
+    "rhp_report_title": "🚨 Report Price Display Violations",
+    "rhp_report_text": (
+        "If you find any partner displaying public prices below RHP guidelines or engaging in \"loophole\" "
+        "behaviors, please follow the format below:\n\n"
+        "📌 Three pieces of information required (all necessary):\n"
+        "1. Violation evidence — store link + screenshot + price (all three required)\n"
+        "2. Violator's contact — WhatsApp or Telegram\n"
+        "3. Violator's location — e.g., Moscow, St. Petersburg, Novosibirsk, etc.\n\n"
+        "📮 How to report (click the buttons below):\n"
+        "- 【RHP Report Channel】→ directly enter the dedicated channel to submit\n"
+        "- 【Direct Report】→ private message the report person in charge\n\n"
+        "🔒 All reports are strictly confidential. Used only for verification and private handling. "
+        "No public naming or dissemination."
+    ),
+    "rhp_report_channel": "RHP Report Channel",
+    "rhp_report_contact": "Direct Report",
+    "rhp_guide_title": "A-BF RHP Guide Prices",
+    "rhp_guide_menu_title": (
+        "📢 RHP Price Statement &amp; Enforcement Rules\n\n"
+        "1. All public display prices must be ≥ RHP healthy price. May be higher, never lower.\n\n"
+        "2. Penalties for violations (only for public low-price display &amp; loophole behaviors):\n"
+        "   • First violation: Private warning, request to adjust price within 24 hours, no public disclosure\n"
+        "   • Second violation: Reduce after-sales priority, extend response and processing time\n"
+        "   • Third violation / repeated non-compliance: Immediately terminate all brand procurement cooperation, "
+        "and publish violation notice on major platforms, forums, and channels\n\n"
+        "3. Incentives for long-term RHP-compliant partners:\n"
+        "   • Priority supply, order sorting, and order processing\n"
+        "   • Highest priority after-sales support and fast technical support from service center\n"
+        "   • Advanced club benefits, early access to new products\n"
+        "   • Long-term cooperation preference, support for compliant partners\n\n"
+        "We are committed to maintaining a healthy, stable, and orderly market environment so that everyone can "
+        "profit long-term, supply long-term, and enjoy quality resources."
+    ),
+    "rhp_guide_quick_button": "Quick view",
+    "rhp_guide_brands_button": "By brand",
+    "rhp_guide_button": "Statement",
+    "rhp_rules_button": "View RHP rules file",
+    "rhp_intro_button": "What is RHP",
+    "rhp_report_button": "Report price violation",
+})
+TEXTS["ru"].update({
+    "rhp_menu_title": (
+        "🏷️Добро пожаловать в раздел RHP (Российская Здоровая Цена)\n\n"
+        "Этот раздел опубликован и контролируется Сервис-центром A-BF (Китайский и Российский офисы).\n\n"
+        "Здесь вы можете:\n"
+        "- Ознакомиться с основными правилами RHP\n"
+        "- Просмотреть список запрещённых действий\n"
+        "- Сообщить о нарушении публичной ценовой политики\n"
+        "- Скачать официальный документ с правилами\n\n"
+        "Используйте кнопки ниже 👇"
+    ),
+    "rhp_intro_title": "📖 Что такое RHP?",
+    "rhp_intro": (
+        "RHP (Российская Здоровая Цена) — это система контроля рекомендованных розничных цен A-BF "
+        "на российском рынке.\n\n"
+        "- Опубликовано и контролируется: A-BF Сервис-центр  (Китайский и Российский офисы)\n\n"
+        "Основные правила (единственные и чёткие):\n"
+        "• Мы контролируем только: публично отображаемые цены на всех电商 платформах\n"
+        "• Включая: Avito, личные магазины, публичные предложения в сообществах, акционные цены на платформах\n"
+        "• Все публичные цены должны быть ≥ рекомендованной цены RHP\n"
+        "• Можно выше, категорически нельзя ниже\n"
+        "• Частные сделки, частные скидки, частные цены — мы не вмешиваемся, не проверяем, не управляем\n\n"
+        "Основная цель: не ограничивать продажи, а защищать долгосрочную прибыль всех партнёров, "
+        "избегая ценовых войн и обесценивания бренда."
+    ),
+    "rhp_rules_intro": (
+        "📄 Документ с правилами RHP\n\n"
+        "Нажмите на Кнопка ниже, чтобы скачать полный PDF:\n\n"
+        "Строго запрещённые «лазейки» (рассматриваются как нарушение):\n"
+        "• Указание в заголовках/описаниях: «скидка XXX руб.», «цена в сообщении», "
+        "«пишите для лучшей цены», «уточняйте цену» и любые другие фразы, направленные на скрытое занижение цены\n"
+        "• Использование скрытых скидок, понижения цены в описании, изменения цены в личном чате для создания "
+        "ложной публичной цены при фактической продаже ниже RHP\n\n"
+        "Принцип определения: любая информация о снижении цены, видимая всем покупателям, считается публичным "
+        "занижением цены."
+    ),
+    "rhp_rules_caption": "📘 Пожалуйста, ознакомьтесь с соответствующими правилами.",
+    "rhp_report_title": "🚨 Сообщить о нарушении публичной цены",
+    "rhp_report_text": (
+        "Если вы обнаружили, что какой-либо партнёр отображает публичную цену ниже RHP или использует «лазейки», "
+        "пожалуйста, следуйте формату ниже:\n\n"
+        "📌 Три обязательных элемента (все необходимы):\n"
+        "1. Доказательства нарушения — ссылка на магазин + скриншот + цена (все три)\n"
+        "2. Контакты нарушителя — WhatsApp или Telegram\n"
+        "3. Регион нарушителя — например: Москва, Санкт-Петербург, Новосибирск и т.д.\n\n"
+        "📮 Способы сообщить (нажмите кнопки ниже):\n"
+        "- 【Канал для сообщений RHP】→ напрямую в专用频道 для отправки\n"
+        "- 【Прямая связь】→ личное сообщение ответственному лицу\n\n"
+        "🔒 Все сообщения строго конфиденциальны. Используются только для проверки и частного реагирования. "
+        "Без публичного оглашения."
+    ),
+    "rhp_report_channel": "Канал для сообщений RHP",
+    "rhp_report_contact": "Прямая связь",
+    "rhp_guide_title": "A-BF RHP рекомендованные цены",
+    "rhp_guide_menu_title": (
+        "📢 Заявление о ценах RHP и правила применения\n\n"
+        "1. Все публично отображаемые цены должны быть ≥ рекомендованной цены RHP. Можно выше, категорически нельзя ниже.\n\n"
+        "2. Меры наказания за нарушения (только за публичное занижение цен и использование лазеек):\n"
+        "   • Первое нарушение: частное предупреждение, требование скорректировать цену в течение 24 часов, без публичного разглашения\n"
+        "   • Второе нарушение: снижение приоритета обслуживания, увеличение времени ответа и обработки\n"
+        "   • Третье нарушение / систематическое неисполнение: немедленное прекращение всех закупок бренда, "
+        "публичное уведомление о нарушении на крупных платформах, форумах и в каналах\n\n"
+        "3. Поощрения для партнёров, долгосрочно соблюдающих RHP:\n"
+        "   • Приоритетные поставки, сортировка заказов, обработка заказов\n"
+        "   • Высший приоритет послепродажного обслуживания и быстрой технической поддержки от сервис-центра\n"
+        "   • Расширенные права в клубе, ранний доступ к новинкам\n"
+        "   • Приоритет долгосрочного сотрудничества, поддержка добросовестных партнёров\n\n"
+        "Мы стремимся поддерживать здоровую, стабильную и упорядоченную рыночную среду, чтобы все могли долго "
+        "зарабатывать, долго поставлять и пользоваться качественными ресурсами."
+    ),
+    "rhp_guide_quick_button": "Быстрый просмотр",
+    "rhp_guide_brands_button": "По брендам",
+    "rhp_guide_button": "Заявление",
+    "rhp_rules_button": "Файл правил RHP",
+    "rhp_intro_button": "Что такое RHP",
+    "rhp_report_button": "Сообщить о нарушении",
 })
 
 
@@ -680,7 +918,7 @@ def _rhp_menu_keyboard(lang: str, tier: str) -> InlineKeyboardBuilder:
     ))
     builder.row(InlineKeyboardButton(
         text=_t(lang, "rhp_guide_button"),
-        callback_data=InventoryCallback(action="rhp_guide", vip=True, tier=tier).pack(),
+        callback_data=InventoryCallback(action="rhp_guide_menu", vip=True, tier=tier).pack(),
     ))
     builder.row(InlineKeyboardButton(
         text={"zh": "返回隐藏菜单", "en": "Back to hidden menu", "ru": "Назад в скрытое меню"}.get(lang, "Back"),
@@ -689,6 +927,23 @@ def _rhp_menu_keyboard(lang: str, tier: str) -> InlineKeyboardBuilder:
     builder.row(InlineKeyboardButton(
         text={"zh": "主菜单", "en": "Main Menu", "ru": "Главное меню"}.get(lang, "Main Menu"),
         callback_data=NavCallback(action="home").pack(),
+    ))
+    return builder
+
+
+def _rhp_guide_menu_keyboard(lang: str, tier: str) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_guide_quick_button"),
+        callback_data=InventoryCallback(action="rhp_guide", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_guide_brands_button"),
+        callback_data=InventoryCallback(action="rhp_guide_brands", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_back"),
+        callback_data=InventoryCallback(action="rhp_menu", vip=True, tier=tier).pack(),
     ))
     return builder
 
@@ -761,6 +1016,53 @@ def _rhp_guide_price_chunks(items: list[RHPGuidePriceItem], lang: str, max_len: 
     if current:
         chunks.append(_rhp_guide_price_table(current, lang))
     return chunks
+
+
+def _rhp_guide_brand_names(items: list[RHPGuidePriceItem], lang: str) -> list[str]:
+    fallback = {"zh": "其他", "en": "Other", "ru": "Другое"}.get(lang, "Other")
+    return list(dict.fromkeys((item.brand.strip() or fallback) for item in items))
+
+
+def _filter_rhp_guide_brand(
+    items: list[RHPGuidePriceItem],
+    brand: str,
+    lang: str,
+) -> list[RHPGuidePriceItem]:
+    fallback = {"zh": "其他", "en": "Other", "ru": "Другое"}.get(lang, "Other")
+    return [item for item in items if (item.brand.strip() or fallback) == brand]
+
+
+def _rhp_guide_brands_keyboard(
+    items: list[RHPGuidePriceItem],
+    lang: str,
+    tier: str,
+) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    brands = _rhp_guide_brand_names(items, lang)
+    for idx, brand in enumerate(brands, start=1):
+        count = len(_filter_rhp_guide_brand(items, brand, lang))
+        builder.row(InlineKeyboardButton(
+            text=f"{brand} ({count})",
+            callback_data=InventoryCallback(action="rhp_guide_brand", vip=True, tier=tier, page=idx).pack(),
+        ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_back"),
+        callback_data=InventoryCallback(action="rhp_guide_menu", vip=True, tier=tier).pack(),
+    ))
+    return builder
+
+
+def _rhp_guide_brand_result_keyboard(lang: str, tier: str) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_guide_brand_back"),
+        callback_data=InventoryCallback(action="rhp_guide_brands", vip=True, tier=tier).pack(),
+    ))
+    builder.row(InlineKeyboardButton(
+        text=_t(lang, "rhp_back"),
+        callback_data=InventoryCallback(action="rhp_guide_menu", vip=True, tier=tier).pack(),
+    ))
+    return builder
 
 
 def _price_field_labels(lang: str) -> dict[str, str]:
@@ -1288,6 +1590,14 @@ async def on_rhp_rules(
     tier = _callback_tier(callback_data)
     if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
         return
+    if lang == "en":
+        await callback.message.edit_text(
+            "\n\n".join((_t(lang, "rhp_rules_intro"), _t(lang, "rhp_rules_sent"))),
+            reply_markup=_rhp_menu_keyboard(lang, tier).as_markup(),
+            disable_web_page_preview=True,
+        )
+        await callback.answer()
+        return
 
     file_path = _rhp_rules_file_for_lang(lang)
     if not file_path.exists():
@@ -1299,8 +1609,9 @@ async def on_rhp_rules(
         return
 
     await callback.message.edit_text(
-        _t(lang, "rhp_rules_sent"),
+        _t(lang, "rhp_rules_intro"),
         reply_markup=_rhp_menu_keyboard(lang, tier).as_markup(),
+        disable_web_page_preview=True,
     )
     await callback.message.answer_document(
         FSInputFile(str(file_path)),
@@ -1335,6 +1646,54 @@ async def on_rhp_report(
     await callback.answer()
 
 
+@router.callback_query(InventoryCallback.filter(F.action == "rhp_guide_menu"))
+async def on_rhp_guide_menu(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+    await callback.message.edit_text(
+        _t(lang, "rhp_guide_menu_title"),
+        reply_markup=_rhp_guide_menu_keyboard(lang, tier).as_markup(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "rhp_guide_brands"))
+async def on_rhp_guide_brands(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+
+    items = await get_rhp_guide_prices()
+    if not items:
+        await callback.message.edit_text(
+            _t(lang, "rhp_guide_empty"),
+            reply_markup=_rhp_guide_menu_keyboard(lang, tier).as_markup(),
+        )
+        await callback.answer()
+        return
+
+    await callback.message.edit_text(
+        _t(lang, "rhp_guide_brand_title"),
+        reply_markup=_rhp_guide_brands_keyboard(items, lang, tier).as_markup(),
+    )
+    await callback.answer()
+
+
 @router.callback_query(InventoryCallback.filter(F.action == "rhp_guide"))
 async def on_rhp_guide(
     callback: CallbackQuery,
@@ -1358,7 +1717,7 @@ async def on_rhp_guide(
         return
 
     chunks = _rhp_guide_price_chunks(items, lang)
-    rhp_keyboard = _rhp_menu_keyboard(lang, tier).as_markup()
+    rhp_keyboard = _rhp_guide_menu_keyboard(lang, tier).as_markup()
     await callback.message.edit_text(
         "\n\n".join((_t(lang, "rhp_guide_title"), chunks[0])),
         reply_markup=rhp_keyboard if len(chunks) == 1 else None,
@@ -1368,6 +1727,51 @@ async def on_rhp_guide(
         await callback.message.answer(
             chunk,
             reply_markup=rhp_keyboard if idx == len(chunks) - 1 else None,
+        )
+
+
+@router.callback_query(InventoryCallback.filter(F.action == "rhp_guide_brand"))
+async def on_rhp_guide_brand(
+    callback: CallbackQuery,
+    callback_data: InventoryCallback,
+    lang: str = "zh",
+    state: FSMContext | None = None,
+) -> None:
+    if not callback.message:
+        return
+    tier = _callback_tier(callback_data)
+    if tier not in PRICE_TIER_CODES or not await _ensure_tier_access(callback, state, lang, tier):
+        return
+
+    items = await get_rhp_guide_prices()
+    brands = _rhp_guide_brand_names(items, lang)
+    brand_idx = callback_data.page - 1
+    if brand_idx < 0 or brand_idx >= len(brands):
+        await callback.answer(_t(lang, "rhp_guide_loading_err"), show_alert=True)
+        return
+
+    brand = brands[brand_idx]
+    brand_items = _filter_rhp_guide_brand(items, brand, lang)
+    if not brand_items:
+        await callback.message.edit_text(
+            _t(lang, "rhp_guide_empty"),
+            reply_markup=_rhp_guide_brands_keyboard(items, lang, tier).as_markup(),
+        )
+        await callback.answer()
+        return
+
+    chunks = _rhp_guide_price_chunks(brand_items, lang)
+    result_keyboard = _rhp_guide_brand_result_keyboard(lang, tier).as_markup()
+    title = "\n".join((_t(lang, "rhp_guide_title"), f"<b>{escape(brand)}</b>"))
+    await callback.message.edit_text(
+        "\n\n".join((title, chunks[0])),
+        reply_markup=result_keyboard if len(chunks) == 1 else None,
+    )
+    await callback.answer()
+    for idx, chunk in enumerate(chunks[1:], start=1):
+        await callback.message.answer(
+            chunk,
+            reply_markup=result_keyboard if idx == len(chunks) - 1 else None,
         )
 
 
